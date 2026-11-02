@@ -1,0 +1,3 @@
+numero_pedido;email_cliente;status_pedido;previsao_entrega
+A123;cliente@example.com;Em separação;2026-11-06
+B444;outra@example.com;Entregue;2026-11-01
