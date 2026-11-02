@@ -15,6 +15,6 @@
 | Known limitations / improvements | README risks section | Documented |
 | Use of AI assistant disclosed | README AI-assistance section | Documented honestly |
 | 3–5 example conversations | Five captured demo examples | Executed offline, visibly marked non-LLM |
-| Public Git repository | Prepared GitHub-safe source only; original internal data excluded | **Requires publication** |
-| Progressive Git history | Local staged source history may be provided with archive | Verify after publication |
+| Public Git repository | Public repo `Gabriel300p/music-emporium-ai-agent`; source + sanitized public case; private manual excluded | **Published, verify current commit** |
+| Progressive Git history | Progressive commits are present on GitHub; verify with `git log` | **Published** |
 | Respond to e-mail / Google Forms | Recruiter delivery procedure | **Requires candidate action / approval** |

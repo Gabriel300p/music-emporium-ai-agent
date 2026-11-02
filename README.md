@@ -3,7 +3,7 @@
 **Artefact technical case · AI Engineer / Full-Stack Applications with Generative AI**  
 **Implementation:** Python · OpenAI Responses API function calling · deterministic CSV queries · citation-based PDF retrieval · CLI
 
-> **Validation status:** All offline tests pass on the supplied challenge data and on separate, public synthetic fixtures. **A real OpenAI API call has NOT been executed in this environment.** Do not interpret the recorded offline conversations as live LLM responses.
+> **Validation status:** 31 offline tests passed with the original authorized files locally; 18 passed and 13 private-data tests were skipped on the public-only checkout. The `data_public/` tables are a sanitized, mixed-provenance supplement and its policy PDF is synthetic. **A real OpenAI API call has NOT been executed in this environment.** Do not interpret the recorded offline conversations as live LLM responses.
 
 ## What this project does
 
@@ -64,7 +64,18 @@ pytest -q
 
 The `--offline` switch invokes a **limited deterministic demonstrator**, not an LLM. It uses the same read-only CSV and PDF lookup components, and is designed for verifying source behavior without incurring API charges. Five real recorded demonstrations are in [`examples/`](examples/).
 
-**Option B — real LLM tool-calling agent using the supplied case files:**
+**Option B — public-safe, larger case dataset:**
+
+The repository contains all **six CSV table types** under [`data_public/`](data_public/), preserving original catalogue/category/promotion/item relations while replacing customer identities, order tracking and private notes with synthetic values. The policy PDF in that folder is a **one-page synthetic demo**, not the internal eight-page source manual. See [`data_public/README.md`](data_public/README.md) for exact provenance and limitations.
+
+```bash
+python -m emporio_agent inspect --data-dir data_public
+python -m emporio_agent chat --data-dir data_public --offline --trace
+# Optional only with a valid API key and your authorization:
+# python -m emporio_agent chat --data-dir data_public --trace
+```
+
+**Option C — real LLM tool-calling agent using the privately supplied case files:**
 
 1. Put the original case files in a local `data/` directory using exactly these names: `products.csv`, `categories.csv`, `promotions.csv`, `orders.csv`, `order_items.csv`, `customers.csv`, `políticas_da_loja.pdf`.
 2. Never commit these original files to a public repository.
@@ -90,6 +101,12 @@ python scripts/record_live_examples.py --data-dir demo_data
 ```
 
 > A ChatGPT subscription does not automatically grant access or credits for the API. Tests and the offline demonstration run without an API key. The full LLM flow needs working network access and API credentials.
+
+## Candidate-led architecture review
+
+The candidate has selected **balanced engineering and applied AI (Strategy C)**. The current direct function-calling implementation is a **provisional baseline**, not evidence that every initial architectural choice was made by the candidate. Read [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md), [`docs/DECISION_REGISTER.md`](docs/DECISION_REGISTER.md) and [`docs/EVALUATION_PLAN.md`](docs/EVALUATION_PLAN.md) before proposing major refactors.
+
+A complete [`Claude / VS Code verification prompt`](docs/CLAUDE_VSCODE_REVIEW_PROMPT.md) is included for an independent technical review. **Live LLM behavior is not yet validated.**
 
 ## Original data schema and business rules
 
@@ -125,11 +142,11 @@ python scripts/record_examples.py --data-dir demo_data --out-dir examples
 
 Offline automated tests cover correct joins, non-cumulative discounts, currency rounding, category inflections, genuine stock status, order verification and privacy, policy page retrieval, missing data, tool calling with a mock model response, and a reproducible multi-turn demonstration.
 
-See [`reports/VALIDATION.md`](reports/VALIDATION.md) for exact results and [`docs/ACCEPTANCE_MATRIX.md`](docs/ACCEPTANCE_MATRIX.md) for the evaluation-requirements checklist. **The real hosted model and full end-to-end behavior still require manual API validation.**
+See [`reports/VALIDATION.md`](reports/VALIDATION.md) and [`reports/REVIEW_HANDOFF_2026-11-02.md`](reports/REVIEW_HANDOFF_2026-11-02.md) for actual results and [`docs/ACCEPTANCE_MATRIX.md`](docs/ACCEPTANCE_MATRIX.md) for the evaluation-requirements checklist. **The real hosted model and full end-to-end behavior still require manual API validation.**
 
 ## Risks, assumptions and limitations
 
-- The supplied PDF labels itself **internal/restricted**. Original manual and customer records are intentionally excluded from this public-ready project; `demo_data/` contains unrelated, clearly marked synthetic replacements.
+- The supplied PDF labels itself **internal/restricted**. The original internal PDF and identifiable customer/order fields are intentionally excluded. `demo_data/` contains entirely synthetic fixtures; `data_public/` contains the sanitized, relational case supplement described above.
 - The source manual has contact-channel discrepancies (pages 2 and 6) and requires careful distinction between the 30-day exchange procedure and 90-day legal warranty (pages 4 and 7). The agent is instructed to flag ambiguity rather than over-promise.
 - Comparing order ID + purchase email is a minimal prototype measure, **not secure authentication**. A production system needs an authenticated account or independent one-time verification; passing raw customer emails to an LLM provider also requires appropriate privacy controls.
 - The CSVs contain old snapshot records. The agent does not synchronize inventory, shipments or campaigns and cannot confirm historical delivery dates are still meaningful.
