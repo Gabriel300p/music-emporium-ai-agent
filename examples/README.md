@@ -1,19 +1,25 @@
-# Five reproducible conversation examples
+# Exemplos de conversa
 
-The files in this directory are **outputs of the local deterministic demonstration** (`OfflineAgent`), using the **fully synthetic** fixtures in `demo_data/`. They illustrate source lookup and business rules without revealing the supplied private data. **They are not recordings of a hosted LLM deciding which tool to call.**
+## Conversas reais com o modelo (as 5 pedidas no desafio)
 
-| Example | What it demonstrates | Tool / behavior |
+Gravadas em 2026-11-02 com o agente final (`gpt-4.1-mini`, OpenAI Responses API), o modelo decidindo sozinho quais ferramentas chamar. Usam só `data_public/`: clientes anonimizados e um manual de políticas **sintético** de uma página. Cada arquivo diz o modelo, a data, as ferramentas executadas e o uso real de tokens e de tempo.
+
+| Arquivo | O que mostra | Ferramentas |
 |---|---|---|
-| [`01_catalogue_budget.md`](01_catalogue_budget.md) | Available violões under R$ 1,000 | `search_products` |
-| [`02_model_and_out_of_scope.md`](02_model_and_out_of_scope.md) | Exact model price and unrelated request | `search_products`, scope fallback |
-| [`03_promotions.md`](03_promotions.md) | Current/original price, promotional discount and PIX | `search_promotions`, `search_policies` |
-| [`04_return_policy.md`](04_return_policy.md) | Buyer's remorse and document page | `search_policies` |
-| [`05_order_verification.md`](05_order_verification.md) | Multi-turn order verification and privacy denial | `order_status` |
+| [`real_01_preco_do_modelo.md`](real_01_preco_do_modelo.md) | Preço do Takamine GD20, com o preço no PIX | `search_products` |
+| [`real_02_faixa_de_preco.md`](real_02_faixa_de_preco.md) | Violões disponíveis até R$ 1.000, no máximo 5 itens e aviso de que há mais | `search_products` |
+| [`real_03_promocao_e_pix.md`](real_03_promocao_e_pix.md) | **Caso não trivial:** promoção do catálogo e regra de que o desconto de PIX não soma com ela | `search_products`, `search_promotions` |
+| [`real_04_arrependimento_de_compra.md`](real_04_arrependimento_de_compra.md) | Devolução por arrependimento, com a página do manual citada | `search_policies` |
+| [`real_05_status_de_pedido.md`](real_05_status_de_pedido.md) | Pedido: e-mail errado primeiro (a ferramenta nega), depois o correto | `order_status` |
 
-Recreate them locally:
+**Como ler:** são amostras de uma execução, não uma medição. A medição está em [`docs/AVALIACAO.md`](../docs/AVALIACAO.md) e em `scripts/eval_live.py`. O manual usado aqui é o sintético; no manual original a regra de devolução está na página 4, e o exemplo 4 cita a página 1 porque o documento de teste tem uma só.
+
+Para gerar conversas novas, use a interface (`./run.sh`) e o botão **Exportar .md**.
+
+## Demonstração offline, sem API (`offline_demo/`)
+
+Cinco conversas geradas pelo agente por regras (sem modelo de linguagem) sobre dados 100% sintéticos de `demo_data/`. Servem para rodar o projeto sem chave e **não representam respostas do modelo**. Para regerar:
 
 ```bash
-python scripts/record_examples.py --data-dir demo_data --out-dir examples
+python scripts/record_examples.py --data-dir demo_data --out-dir examples/offline_demo
 ```
-
-The real model path is implemented separately. To produce LLM-generated transcripts, an authorized API test must first be executed using a privacy-safe dataset, followed by a manual review of the outputs. See [`docs/EVALUATION_PLAN.md`](../docs/EVALUATION_PLAN.md).

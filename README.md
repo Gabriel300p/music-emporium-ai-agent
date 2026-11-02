@@ -1,110 +1,146 @@
-# Music Emporium — AI Customer Support Agent
+# Empório da Música · Atendente virtual
 
-**Artefact · AI Engineer technical challenge · Python prototype**
+Agente de atendimento em Python para uma loja fictícia de instrumentos musicais (Campo Grande/MS), feito para o **desafio técnico de AI Engineer da Artefact**. Um modelo de linguagem decide quando consultar o catálogo, os pedidos ou o manual de políticas da loja e responde em português com base no que as ferramentas devolveram.
 
-A musical-instrument retailer receives repetitive questions about products, prices, availability, deliveries and store policies. This project explores how a **read-only AI assistant** can answer those questions using the right source of evidence instead of relying on a model's memory.
+**Em uma tela:** [Teste em 2 minutos](#teste-em-2-minutos) · [Resultados](#resultados-medidos) · [Decisões](docs/DECISOES.md) · [Avaliação](docs/AVALIACAO.md) · [Como foi construído](docs/PROCESSO.md)
 
-**What is delivered:** a Python agent foundation with OpenAI Responses API function calling, four controlled lookup tools, six related CSV datasets, policy-document retrieval, a CLI, automated tests and five reproducible **offline** conversation examples.
+## O que este projeto demonstra
 
-> **Verification at a glance:** 31 local tests passed with the authorized original files; on a public-only checkout, 18 passed and 13 original-data tests were skipped. The hosted LLM flow is implemented **but has not been tested against the real API**. Offline examples are rule-based demonstrations, not recordings from an LLM.
+- **Separação entre o modelo e o que precisa ser exato.** O modelo escolhe qual ferramenta chamar; Python faz as contas de preço, desconto e estoque, filtra produtos e verifica pedidos. O modelo não calcula nem inventa esses dados.
+- **Qualidade medida, não suposta.** Uma bateria de 27 cenários roda o modelo real (3 repetições cada) e checa a ferramenta escolhida, os valores na resposta, a privacidade e a resistência a injeção de prompt. A evolução e as falhas encontradas estão em [`docs/AVALIACAO.md`](docs/AVALIACAO.md).
+- **Honestidade sobre o que falha.** Cada limitação conhecida está documentada com o número que a sustenta, inclusive a busca de políticas, que ainda erra em paráfrases.
+- **Produto testável por qualquer pessoa.** Um comando instala tudo e abre uma interface web local com progresso em tempo real, texto em streaming e o painel "o que o agente consultou".
 
-## The problem and the product boundary
+## Teste em 2 minutos
 
-Empório da Música, a fictional instrument store in Campo Grande, Brazil, needs help with recurring customer requests. The goal is to reduce the effort required to locate accurate information—not to let an LLM invent stock levels, change an order or make refund decisions.
+Requisito: **Python 3.11 ou mais novo** ([python.org/downloads](https://www.python.org/downloads/); no Windows, marque "Add python.exe to PATH").
 
-| Customer request | Agent behavior | Source |
+| Sistema | Como abrir |
+|---|---|
+| **Linux / macOS** | `./run.sh` (ou `bash run.sh`) |
+| **Windows** | duplo clique em `run.bat` |
+
+Na primeira vez, o programa cria um ambiente isolado em `.venv/` e instala as dependências (cerca de 1 minuto, precisa de internet). Depois abre o navegador em `http://127.0.0.1:8765`. Para desfazer, apague a pasta `.venv/`.
+
+1. **Sem chave de API**, o modo **Offline** já funciona (respostas por regras simples, sem custo).
+2. **Para ver o modelo de verdade**, clique em **Chave**, cole uma chave de API da OpenAI e escolha **Modelo real**. A chave fica só na memória do programa: não é gravada em arquivo, não aparece em logs nem na conversa exportada. Quem não tiver chave pode ler as [conversas reais gravadas](examples/).
+3. Clique numa sugestão da tela inicial ou use o botão **Sugestões** no campo de texto (cada uma diz o que testa).
+4. À direita, **"O que o agente consultou"** mostra, por resposta, quais fontes foram usadas, o tempo de cada chamada ao modelo e, em **Ver dados**, a saída bruta como prova.
+
+> **Dados em uso:** `data_public/`, uma versão sanitizada (clientes anonimizados). O manual de políticas dessa pasta é um documento **sintético de uma página**; o manual interno de 8 páginas do desafio não está neste repositório.
+>
+> **Plataformas:** o lançador `run.sh` foi testado em Linux (WSL2). O `run.bat` foi escrito para o Windows, mas **não foi executado em Windows**.
+
+<details>
+<summary>Sem o lançador: comandos manuais</summary>
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"             # Windows: .venv\Scripts\pip install -e ".[dev]"
+.venv/bin/python -m emporio_agent serve       # interface web (opções: --port, --no-browser, --base-url)
+.venv/bin/python -m emporio_agent chat --data-dir data_public --offline --trace   # terminal, sem chave
+.venv/bin/python -m emporio_agent chat --data-dir data_public --trace             # terminal, com OPENAI_API_KEY
+.venv/bin/pytest -q
+```
+
+A chave também pode vir da variável `OPENAI_API_KEY` ou de um `.env` local (veja `.env.example`; o `.env` é ignorado pelo Git). A variável `OPENAI_BASE_URL` do ambiente é ignorada de propósito: o endpoint é `api.openai.com`, a menos que se passe `--base-url`.
+</details>
+
+## O que o agente faz
+
+| Pedido do cliente | Fonte | Comportamento |
 |---|---|---|
-| “Quais violões disponíveis custam até R$ 1.000?” | Filter by category, current price, catalogue status and stock; show available options | `search_products` → CSVs |
-| “O Takamine GD20 está em promoção?” | Retrieve catalogue price and campaign flags; do not stack promotional and PIX discounts | `search_products` / `search_promotions` → CSVs |
-| “Onde está meu pedido?” | Request the order ID and purchase email before a **limited prototype check**; do not disclose other customers' details | `order_status` → linked CSVs |
-| “Me arrependi da compra, posso devolver?” | Find the applicable policy passage, cite its page and avoid promising an automatic refund | `search_policies` → PDF |
-| Unrelated or unsupported request | State the limitation and redirect appropriately | Scope and tool-result rules |
+| Preço, estoque, faixa de preço | `search_products` → CSVs | Filtra por categoria, orçamento e status; usa o preço promocional; nunca mostra produto descontinuado como disponível |
+| Promoções | `search_promotions` → CSVs | Só promoções ativas de produtos disponíveis; o desconto de PIX **não** soma com promoção |
+| Status de pedido | `order_status` → CSVs | Exige número do pedido **e** e-mail da compra; sem os dois, nada é revelado |
+| Horário, endereço, pagamento, troca, devolução, garantia | `search_policies` → PDF | Traz o trecho do manual com a página; sem evidência, diz que não sabe e encaminha à equipe |
+| Fora do escopo | (nenhuma) | Recusa com educação e volta ao que a loja atende |
 
-The prototype **does not** take payments, modify orders, issue refunds, send messages, synchronize live inventory or access a real customer-support system.
+O agente **não** compra, troca, reembolsa nem altera dados. Catálogo e pedidos são um retrato em CSV, não estoque em tempo real.
 
-## Run the project
-
-Requires **Python 3.11+**. Start with the public, privacy-safe dataset; no API key is needed for inspection or offline tests.
-
-```bash
-python -m venv .venv
-# Activate .venv (Windows PowerShell: .venv\Scripts\Activate.ps1; macOS/Linux: source .venv/bin/activate)
-python -m pip install -e ".[dev]"
-python -m emporio_agent inspect --data-dir data_public
-pytest -q
-python -m emporio_agent chat --data-dir data_public --offline --trace
-```
-
-Try: `Quais violões disponíveis custam até R$ 1.000?` The public CSV snapshot contains **12 matching instruments**; the CLI displays up to eight at a time. Tool traces show the tool name and status without printing customer data. The `--offline` switch is a **deterministic demonstration**, not an LLM.
-
-To exercise actual model-driven tool selection, configure your own API credentials privately and run **without** `--offline`:
-
-```bash
-# Set OPENAI_API_KEY in your environment; optionally set OPENAI_MODEL.
-python -m emporio_agent chat --data-dir data_public --trace
-```
-
-This is an **optional, unverified live path**; it requires working credentials, internet and API usage. A ChatGPT subscription does not itself include API credits. The CLI defaults to the configurable `gpt-4.1-mini` model; no quality, latency or cost benchmarks are claimed.
-
-**Using the original Artefact materials:** place `products.csv`, `categories.csv`, `promotions.csv`, `orders.csv`, `order_items.csv`, `customers.csv` and `políticas_da_loja.pdf` in the Git-ignored `data/` folder, then replace `--data-dir data_public` with `--data-dir data`. Do not commit these private originals.
-
-## How it works
+## Arquitetura
 
 ```mermaid
 flowchart TD
-    U[Customer message / CLI] --> L[LLM: choose a tool or respond]
-    L --> P[search_products]
-    L --> R[search_promotions]
-    L --> O[order_status]
-    L --> K[search_policies]
-    P --> C[CSV catalogue and stock]
-    R --> C
-    O --> D[CSV orders and customers]
-    K --> F[PDF page-level lexical retrieval]
-    C --> A[Evidence sent back to the model]
-    D --> A
-    F --> A
-    A --> L
-    L --> S[Grounded answer or stated limitation]
+    A[Mensagem do cliente] --> B[Modelo com function calling]
+    B -->|catálogo e preços| C[search_products]
+    B -->|promoções ativas| D[search_promotions]
+    B -->|pedido + e-mail| E[order_status]
+    B -->|regras da loja| F[search_policies]
+    C --> G[CSVs: filtros exatos, Decimal]
+    D --> G
+    E --> H[CSVs: verificação por e-mail]
+    F --> I[PDF: busca lexical por página]
+    G --> J[Resposta fundamentada ou limitação declarada]
+    H --> J
+    I --> J
 ```
 
-The tools are **read-only**. The model chooses *which* function to call; Python performs the catalogue joins, price arithmetic, stock filtering and order checks. Policy passages are retrieved from a PDF using lightweight, page-level lexical matching; **this is not vector search or an embeddings pipeline**. The function-calling loop is bounded and avoids arbitrary code or SQL execution.
+| Decisão | Escolha | Por quê (detalhes e alternativas em [`docs/DECISOES.md`](docs/DECISOES.md)) |
+|---|---|---|
+| Orquestração | *Function calling* direto, 4 ferramentas só de leitura, laço de até 6 voltas | Poucas ferramentas e fluxo sem ramificação; ReAct em texto ou LangGraph só trariam código e dependências sem ganho medido |
+| Dados estruturados | Funções Python sobre CSVs em memória | Preço e estoque exigem conta exata; um agente de SQL daria ao modelo acesso à tabela de clientes e resultados não reproduzíveis |
+| Políticas | Busca lexical por página, com sinônimos, citando a página | Manual de 8 páginas curtas; embeddings seriam infraestrutura demais. **Limite medido:** falha em paráfrases |
+| Modelo | `gpt-4.1-mini`, configurável | Modelo pequeno com chamada de ferramentas. Comparei latência com outros modelos: ficaram na mesma faixa (≈2 s por resposta) |
+| Interface | Web local (só biblioteca padrão) e CLI | O foco é o agente; a página existe para qualquer pessoa testar sem terminal |
 
-The current design is intentionally small: adding LangGraph, an SQL agent or a vector database should solve a **measured limitation**, not merely increase the technology count. See [architecture and trade-offs](docs/ARCHITECTURE_BRIEF.md) and the [decision record](docs/DECISION_REGISTER.md).
+## Resultados medidos
 
-## Evidence and limitations
+| O que | Resultado | Como reproduzir |
+|---|---|---|
+| Testes automáticos (sem rede, sem chave) | **69 passam, 13 pulados** num clone público (os 13 exigem os arquivos originais privados) | `pytest -q` |
+| Bateria com o modelo real: 27 cenários × 3 repetições | **81 de 81 corretas** na última rodada. O cenário de paráfrase de política oscila entre rodadas (de 4 a 9 acertos em 10 repetições), então esse número não é uma garantia | `python scripts/eval_live.py --rep 3` |
+| Privacidade e segurança nessa bateria | 0 vazamentos de dado pessoal, 0 preços inventados, 0 instruções injetadas obedecidas (inclusive uma escondida no nome de um produto) | idem |
+| Tempo por resposta | 1,7 a 3,2 s no ambiente de desenvolvimento, quase todo em duas chamadas seguidas à API; cada ferramenta local leva de 0,05 a 2 ms. Rodando na máquina do autor foram observados 5 a 10 s (causa em investigação, provavelmente rede) | painel "O que o agente consultou" mostra o tempo de cada chamada |
 
-| What was checked | Current evidence |
+A bateria usa `data_public/` e um modelo só. A rubrica é automática e foi escrita pelo autor; mede regressão, não "qualidade de redação". Detalhes, evolução e limites em [`docs/AVALIACAO.md`](docs/AVALIACAO.md).
+
+## Atende ao enunciado?
+
+| Pedido do enunciado | Onde ver |
 |---|---|
-| Dataset integrity | Six CSV types; 65 products, 9 categories, 25 promotions, 20 orders, 22 order items and 50 customers; joins checked |
-| Catalogue and promotions | Deterministic price, stock and non-cumulative discount checks passed |
-| Policy retrieval | Original eight-page manual retrieved locally with page references; public PDF is a **one-page synthetic fixture** |
-| Automated tests | **31 passed** with original files available locally; **18 passed, 13 skipped** on public-only setup |
-| Conversation examples | **Five offline, deterministic** transcripts, generated by a script and clearly labelled |
-| Hosted LLM tool selection, answer accuracy, cost and latency | **Not yet evaluated** on the actual API |
+| Python, agente de mensagens de texto com persona | `src/emporio_agent/` (o texto da persona está em `agent.py`) |
+| Saber quando consultar dados e quando consultar políticas | 4 ferramentas em `agent.py`; cenários S01–S06 da bateria |
+| Lidar com perguntas fora do escopo | cenários S10, S11, S13 e S14; [conversas gravadas](examples/) |
+| Decisões justificadas no README | tabela acima e [`docs/DECISOES.md`](docs/DECISOES.md) |
+| Instruções para rodar | seção "Teste em 2 minutos" |
+| Limitações conhecidas e o que faria com mais tempo | seção abaixo |
+| Uso de assistentes de código e *workflow* | seção "Como foi construído" e [`docs/PROCESSO.md`](docs/PROCESSO.md) |
+| 3 a 5 conversas, ao menos uma não trivial | [`examples/`](examples/): 5 conversas reais com o modelo; a 3 combina a promoção do catálogo com a regra do PIX |
+| Repositório público com histórico real | commits incrementais; os 5 primeiros vieram juntos (veja [`docs/PROCESSO.md`](docs/PROCESSO.md)) |
 
-The published `data_public/` set preserves original non-personal product/category/promotion/item rows but **replaces identifying customer fields, tracking details and notes**. The source policies document is marked internal and is therefore not published. The order ID + purchase email check is useful only to demonstrate the read path; **it is not production authentication**. CSV values are snapshots, not real-time business data.
+## Limitações conhecidas
 
-Read the [test log](reports/VALIDATION.md), [12-scenario evaluation plan](docs/EVALUATION_PLAN.md), [security notes](docs/SECURITY.md) and [assignment traceability](docs/ACCEPTANCE_MATRIX.md). A live model evaluation and stronger identity verification are the main unresolved engineering tasks.
+- **Busca de políticas lexical.** Em 17 perguntas parafraseadas sobre o manual original, a página certa ficou em 1º lugar em 10 e entre as 3 primeiras em 14; 3 voltaram vazias. Depende de um mapa de sinônimos e de páginas escrito para a versão 2.1 do manual.
+- **Autenticação de pedido fraca.** O e-mail é o único fator, os números de pedido são sequenciais e não há limite de tentativas. Serve ao protótipo, **não à produção**.
+- **Dados em retrato.** Sem estoque nem pedidos em tempo real; promoções só têm o indicador `is_active`, sem datas.
+- **Erro de API no terminal** (`chat`) encerra a sessão; na interface web a conversa continua. O corte do histórico por número de itens pode quebrar conversas muito longas com ferramentas (não testado).
+- **Avaliação limitada:** um modelo, 3 repetições, rubrica própria, manual sintético de 1 página nos testes com o modelo. Os cenários de paráfrase de política e de produto descontinuado oscilam entre rodadas.
+- **A interface web é uma ferramenta local de um usuário:** sem login e sem persistência.
 
-## Development approach and AI assistance
+**Com mais tempo:** retrieval medido (BM25 por parágrafo antes de pensar em embeddings), autenticação por sessão ou código, datas de vigência nas promoções, bateria em CI com mais cenários e mais de um modelo, e reexecução com o manual original.
 
-The first executable baseline was produced through an **AI-assisted engineering workflow**: the case brief and datasets were provided to ChatGPT, which helped generate the initial Python implementation, tests and documentation. Prior work exploring agent orchestration in the separate **Pandora** project informed the review of tool boundaries, context and verification; Pandora code or infrastructure was **not** integrated here.
+## Como foi construído
 
-After the baseline was built, the candidate identified the need for **explicit architecture review and ownership**, selected a pragmatic engineering + applied AI direction and introduced a decision register and evaluation plan. Initial choices that were generated with assistance are not represented as independently candidate-designed. The next step is a reproducible technical review and a bounded live evaluation, not more unmeasured complexity.
+- **Base inicial:** o código, os testes e a primeira documentação foram gerados com o **ChatGPT** (OpenAI), de uma vez. Por isso os primeiros commits são seguidos.
+- **Revisão e evolução:** com o **Claude Code** (Anthropic), em sessões dirigidas por mim, fiz uma auditoria independente (testes, integridade das tabelas, regras de desconto, privacidade), escrevi a bateria de avaliação com o modelo real, a interface web, o lançador e as otimizações de desempenho.
+- **O que eu decidi e testei:** a estratégia (equilíbrio entre engenharia confiável e IA aplicada), o escopo do produto, o que entra e o que sai da interface e a ordem das prioridades. Testei à mão e **encontrei defeitos que a avaliação automática não pegou** (pedido que falhava no meio de uma conversa, botão "Ver mais" sem efeito, demora de resposta); cada um virou correção com teste.
+- **Verificação:** nada foi aceito sem execução. Os números deste README vêm de comandos rodados; as falhas estão descritas, não omitidas.
 
-See [the development journey and evidence](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md). This disclosure is part of the assignment's requirement to explain how AI coding assistance was used.
+A história completa, com a linha do tempo, as regressões encontradas e como foram resolvidas, está em [`docs/PROCESSO.md`](docs/PROCESSO.md).
 
-## Project navigation
+## Estrutura do projeto
 
-| Area | Contents |
-|---|---|
-| [`src/emporio_agent/`](src/emporio_agent/) | Agent loop, CLI, CSV tools, PDF retrieval, offline demo |
-| [`data_public/`](data_public/) | Public working data with documented provenance and redaction |
-| [`examples/`](examples/) | Five transparent offline example conversations |
-| [`tests/`](tests/) | Unit, data-integrity and original-data integration tests |
-| [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md) | Architecture, alternatives and rationale |
-| [`docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md`](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md) | How the initial working baseline was created and reviewed |
-| [`reports/VALIDATION.md`](reports/VALIDATION.md) | Reproducible results and what remains unverified |
+```text
+run.sh, run.bat       lançadores de um comando
+src/emporio_agent/    agente, ferramentas, busca de políticas, CLI, interface web
+scripts/              bateria com o modelo real, geração de dados e de exemplos
+tests/                testes automáticos
+data_public/          dados sanitizados (clientes anonimizados, PDF sintético)
+demo_data/            dados 100% sintéticos para a demonstração offline
+examples/             5 conversas reais com o modelo + demonstração offline
+docs/                 decisões, avaliação, segurança e processo
+data/                 arquivos originais do desafio (ignorados pelo Git)
+```
 
-**Submission note:** the recruiter supplies the actual deadline and delivery channels. Review the project and do not modify the repository after submitting it, as required by the technical challenge.
+Os dados originais ficam em `data/` apenas localmente. Nunca versione essa pasta nem um arquivo `.env`.
