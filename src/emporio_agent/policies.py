@@ -72,10 +72,22 @@ class Chunk:
     text: str
 
 
+def load_policies(data_dir: str | Path) -> "PolicyIndex":
+    """The manual of a data folder (accented or ASCII file name)."""
+    data_dir = Path(data_dir)
+    index = PolicyIndex(data_dir / "políticas_da_loja.pdf")
+    if not index.chunks:
+        alternative = data_dir / "politicas_da_loja.pdf"
+        if alternative.exists():
+            index = PolicyIndex(alternative)
+    return index
+
+
 class PolicyIndex:
     def __init__(self, pdf_path: str | Path):
         self.pdf_path = Path(pdf_path)
         self.chunks: list[Chunk] = []
+        self._build()
         if not self.pdf_path.exists():
             return
         from pypdf import PdfReader
@@ -85,6 +97,14 @@ class PolicyIndex:
             text = re.sub(r"\s+", " ", extracted).strip()
             if text:
                 self.chunks.append(Chunk(page_number, text))
+        self._build()
+
+    def _build(self) -> None:
+        """Tokenise the manual once. Per question we only need term counts and document frequencies."""
+        self._counters = [Counter(terms(chunk.text)) for chunk in self.chunks]
+        self._df: Counter[str] = Counter()
+        for counter in self._counters:
+            self._df.update(counter.keys())
 
     def search(self, question: str, top_k: int = 3) -> dict:
         if not self.chunks:
@@ -93,15 +113,14 @@ class PolicyIndex:
         if not qterms:
             return {"status": "no_evidence", "results": []}
         q = set(qterms)
-        counters = [Counter(terms(chunk.text)) for chunk in self.chunks]
-        n = len(counters)
+        n = len(self._counters)
+        idf = {token: math.log(1 + (n + 1) / (1 + self._df[token])) for token in q}
         scored = []
-        for i, (chunk, counter) in enumerate(zip(self.chunks, counters)):
-            score = sum((1 + math.log(1 + counter[token])) * math.log(1 + (n + 1) / (1 + sum(token in c for c in counters)))
-                        for token in q if counter[token] > 0)
+        for chunk, counter in zip(self.chunks, self._counters):
+            score = sum((1 + math.log(1 + counter[token])) * idf[token] for token in q if counter[token] > 0)
             for triggers, pages in TOPICS:
                 if q.intersection(triggers) and chunk.page in pages:
-                    # Boost only if the page has at least one of the topic triggers.
+                    # Boost only if the page contains at least one of the topic triggers.
                     if any(counter[term] > 0 for term in triggers):
                         score += 3
             if score > 0:

@@ -1,6 +1,6 @@
 """Live evaluation of the support agent with a REAL LLM (costs API tokens).
 
-Runs 22 scenarios against data_public/ only (anonymized customers, synthetic policy PDF) and checks, with simple
+Runs 25 scenarios (22 single-turn plus 3 multi-turn) against data_public/ only (anonymized customers, synthetic policy PDF) and checks, with simple
 automatic rules, which tool was called and what the answer contains (prices, privacy, scope, injection).
 It prints pass rates per scenario and the real token usage reported by the API. It does not read data/.
 
@@ -135,6 +135,14 @@ S += [
  dict(id="V2_pedido_hash", area="pedido-variante", turns=[f"pedido #{_oid}, e-mail {_em}"], check=_order_ok([c_ok["email"]])),
  dict(id="V3_pedido_longo", area="pedido-variante", turns=[f"Meu pedido é o {_oid} e o e-mail que usei na compra é {_em}. Pode verificar para mim?"], check=_order_ok([c_ok["email"]])),
  dict(id="V4_pedido_dois_turnos_num_completo", area="pedido-variante", turns=[f"Qual o status do pedido número {_oid}?", f"O e-mail é {_em}"], check=_order_ok([c_ok["email"]])),
+]
+
+# Multi-turn: the order request must work in the MIDDLE of a conversation, not only in a fresh one.
+_ORDER_MSG = f"Quero saber do pedido {_oid}. Meu e-mail é {_em}"
+S += [
+ dict(id="M1_pedido_apos_preco", area="multi-turno", turns=["Quanto custa o Takamine GD20?", _ORDER_MSG], check=_order_ok([c_ok["email"]])),
+ dict(id="M2_pedido_apos_promocoes", area="multi-turno", turns=["Quais promoções estão ativas?", _ORDER_MSG], check=_order_ok([c_ok["email"]])),
+ dict(id="M3_pedido_apos_politica", area="multi-turno", turns=["Me arrependi da minha compra, posso devolver meu pedido?", _ORDER_MSG], check=_order_ok([c_ok["email"]])),
 ]
 
 results = []

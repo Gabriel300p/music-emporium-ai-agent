@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .policies import PolicyIndex
+from .policies import PolicyIndex, load_policies
 from .store import CSVStore, textnorm, price_number
 
 
@@ -19,11 +19,9 @@ def brl(value: float | int | None) -> str:
 
 
 class OfflineAgent:
-    def __init__(self, data_dir: str | Path):
-        self.store = CSVStore(data_dir)
-        self.policies = PolicyIndex(Path(data_dir) / "políticas_da_loja.pdf")
-        if not self.policies.chunks:
-            self.policies = PolicyIndex(Path(data_dir) / "politicas_da_loja.pdf")
+    def __init__(self, data_dir: str | Path, *, store: CSVStore | None = None, policies: PolicyIndex | None = None):
+        self.store = store if store is not None else CSVStore(data_dir)
+        self.policies = policies if policies is not None else load_policies(data_dir)
         self.pending_order: str | None = None
 
     def reply(self, message: str) -> tuple[str, list[dict[str, str]]]:
