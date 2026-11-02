@@ -1,0 +1,5 @@
+product_id,price_brl,name,category_id,description,stock_quantity,status,specs,created_at
+1,599.90,Violão Escola C30 Demo,1,Violão de estudo (fictício),10,active,{},2026-10-01
+2,2199.00,Takamine GD20 Demo,1,Violão folk (preço fictício),5,active,{},2026-10-01
+3,1099.00,Violão Folk Promo Demo,1,Violão fictício em oferta,4,active,{},2026-10-01
+4,999.00,Guitarra Estudo GX Demo,2,Guitarra fictícia,0,active,{},2026-10-01
