@@ -12,6 +12,13 @@ This records **provenance and ownership** of decisions. A working implementation
 | ADR-006 | Use the present CLI rather than add UI | **Provisional** | Initial implementation, not candidate-approved | Technical assignment explicitly permits CLI |
 | ADR-007 | Select final provider and model | **Open** | Candidate decision pending | No live API benchmark |
 | ADR-008 | Decide whether to invest in semantic retrieval/observability | **Open** | Candidate decision pending | Evaluation plan first |
+| ADR-009 | Use the ChatGPT-assisted transformation from source materials to tested foundation as an evidence-backed interview case, with Pandora as prior conceptual experience | **Accepted as narrative direction; specific claims remain subject to review** | Candidate request 2026-11-02 | `AI_ASSISTED_ENGINEERING_CASE_STUDY.md` + commit/test evidence; no claim of fully autonomous production execution |
+
+## Engineering ownership and attribution
+
+The first executable baseline was generated with AI assistance before the candidate had reviewed every implementation decision. The candidate selected **balanced engineering + applied AI (Strategy C)** and requested a change in process: **specification → AI-assisted baseline → reproducible checks → candidate briefing → explicit architecture choices → independent review**.
+
+Documenting this workflow as an interview case does **not** retroactively make the initial design decisions candidate-authored. Pandora is referenced as prior experience and a source of engineering principles; it is not claimed to have supplied a runtime to this application.
 
 ## ADR template for future candidate decisions
 
