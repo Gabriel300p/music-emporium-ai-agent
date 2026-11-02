@@ -1,6 +1,7 @@
 """Local web UI: server contract, privacy guards and tool-output capture (synthetic data only, no network)."""
 import http.client
 import json
+import re
 import shutil
 import socket
 import threading
@@ -38,6 +39,37 @@ class FakeClient:
         call = SimpleNamespace(type="function_call", name="search_products", call_id="c1",
                                arguments=json.dumps({"query": None, "category": "violões", "max_price": 1000, "in_stock_only": False}))
         return SimpleNamespace(output=[call], output_text="", usage=SimpleNamespace(input_tokens=100, output_tokens=20))
+
+    def stream(self, **kwargs):
+        response = self.create(**kwargs)
+        text = response.output_text
+        return _FakeStream(response, [text[:9], text[9:]] if text else [])
+
+
+class _FakeStream:
+    def __init__(self, response, deltas):
+        self.response, self.deltas = response, deltas
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        for d in self.deltas:
+            yield SimpleNamespace(type="response.output_text.delta", delta=d)
+
+    def get_final_response(self):
+        return self.response
+
+
+class NoStreamClient:
+    """A client that only offers create(): the stream route must still work, just without deltas."""
+
+    def __init__(self, inner):
+        self.responses = self
+        self.create = inner.create
 
 
 @pytest.fixture()
@@ -219,6 +251,79 @@ def test_session_is_bound_to_its_data_source(server):
     assert status == 409 or (status == 200 and out["tools"] == [])
 
 
+# ---------- streaming route ----------
+
+def stream_events(srv, message, **over):
+    body = {"session": "5" * 16, "message": message, "mode": "llm", "model": "", "data": "demo"}
+    body.update(over)
+    status, ctype, data = call(srv, "POST", "/api/chat/stream", body)
+    return status, ctype, [json.loads(line) for line in data.decode().splitlines() if line.strip()]
+
+
+def test_stream_route_emits_progress_then_text_then_done(server):
+    status, ctype, events = stream_events(server, "Violões até R$ 1.000?")
+    assert status == 200 and "ndjson" in ctype
+    kinds = [e["type"] for e in events]
+    assert kinds[0] == "status" and kinds[-1] == "done"
+    assert kinds.index("tool_start") < kinds.index("tool") < kinds.index("delta") < kinds.index("done")
+    start = next(e for e in events if e["type"] == "tool_start")
+    tool = next(e for e in events if e["type"] == "tool")
+    assert start["tool"] == tool["tool"] == "search_products" and tool["output"]["status"] == "ok"
+    done = events[-1]
+    assert "".join(e["text"] for e in events if e["type"] == "delta") == done["reply"] == "Encontrei o Violão Escola C30 Demo."
+    assert done["error"] is None and done["trace"] == [{"tool": "search_products", "status": "ok"}]
+    assert done["usage"]["calls"] == 2 and len(done["usage"]["seconds_each"]) == 2
+
+
+def test_stream_route_works_offline_without_deltas(server):
+    status, _, events = stream_events(server, "Quais violões disponíveis custando até R$ 1.000?", mode="offline", session="6" * 16)
+    kinds = [e["type"] for e in events]
+    assert status == 200 and "delta" not in kinds and kinds[-1] == "done" and "tool" in kinds
+    assert "R$ 599,90" in events[-1]["reply"]
+
+
+def test_stream_route_without_client_streaming_support_still_finishes(fake):
+    sources = {"demo": web.Source("Demo", DEMO, False)}
+    srv = web.create_server(sources, "demo", port=0, client_factory=lambda: NoStreamClient(fake), environ={"OPENAI_API_KEY": SECRET})
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        status, _, events = stream_events(srv, "Violões até R$ 1.000?")
+        kinds = [e["type"] for e in events]
+        assert status == 200 and "delta" not in kinds and kinds[-1] == "done"
+        assert events[-1]["reply"] == "Encontrei o Violão Escola C30 Demo." and events[-1]["error"] is None
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_stream_route_reports_upstream_error_in_done_and_session_survives(server, fake):
+    fake.fail = True
+    status, _, events = stream_events(server, "Oi")
+    done = events[-1]
+    assert status == 200 and done["type"] == "done" and done["reply"] is None
+    assert "RuntimeError" in done["error"] and "PLACEHOLDER-upstream" not in done["error"]
+    fake.fail = False
+    _, _, events = stream_events(server, "Violões até R$ 1.000?")
+    assert events[-1]["error"] is None and events[-1]["reply"]
+
+
+def test_stream_route_has_the_same_guards_as_chat(server):
+    body = {"session": "5" * 16, "message": "oi", "mode": "offline", "model": "", "data": "demo"}
+    assert call(server, "POST", "/api/chat/stream", body, headers={"Origin": "http://evil.example.com"})[0] == 403
+    assert call(server, "POST", "/api/chat/stream", raw=b"{}", headers={"Content-Type": "text/plain"})[0] == 415
+    assert call(server, "POST", "/api/chat/stream", {**body, "session": "../x"})[0] == 400
+    assert call(server, "POST", "/api/chat/stream", {**body, "message": "a" * 2001})[0] == 400
+    assert call(server, "POST", "/api/chat/stream", {**body, "mode": "outro"})[0] == 400
+    assert call(server, "POST", "/api/chat/stream", {**body, "data": "inexistente"})[0] == 400
+    assert call(server, "POST", "/api/chat/stream", body, headers={"Host": "evil.example.com"})[0] == 403
+
+
+def test_usage_reports_seconds_of_each_api_call(server):
+    _, out = chat(server, "Violões até R$ 1.000?", mode="llm", session="7" * 16)
+    each = out["usage"]["seconds_each"]
+    assert len(each) == 2 and all(isinstance(x, float) and x >= 0 for x in each)
+
+
 # ---------- guards ----------
 
 def test_rejects_foreign_host(server):
@@ -286,6 +391,49 @@ def test_config_samples_are_labelled_and_order_samples_use_public_data(server):
     assert cfg["key_source"] == "env"
 
 
+def test_ambient_openai_base_url_is_ignored_unless_passed_explicitly():
+    ambient = {"OPENAI_BASE_URL": "http://127.0.0.1:8787", "OPENAI_API_KEY": SECRET}
+    srv = web.create_server({"demo": web.Source("Demo", DEMO, False)}, "demo", port=0, environ=ambient)
+    try:
+        cfg = srv.app.config()
+    finally:
+        srv.server_close()
+    assert cfg["endpoint_host"] == "api.openai.com" and cfg["endpoint_is_openai"] is True
+    srv = web.create_server({"demo": web.Source("Demo", DEMO, False)}, "demo", port=0, environ=ambient,
+                            base_url="https://llm.example.org/v1")
+    try:
+        cfg = srv.app.config()
+    finally:
+        srv.server_close()
+    assert cfg["endpoint_host"] == "llm.example.org" and cfg["endpoint_is_openai"] is False
+
+
+def test_page_does_not_show_an_endpoint_warning_banner():
+    assert "não é api.openai.com" not in web.PAGE
+
+
+def test_samples_have_short_label_and_a_known_icon(server):
+    cfg = json.loads(call(server, "GET", "/api/config")[2])
+    for sample in cfg["samples"]:
+        assert 0 < len(sample["label"]) <= 18, sample
+        assert f'id="i-{sample["icon"]}"' in web.PAGE, f"missing icon symbol: {sample['icon']}"
+
+
+def test_page_has_the_new_structure_and_stays_self_contained():
+    page = web.PAGE
+    for needle in ('id="key-dialog"', 'id="settings-dialog"', 'id="kpis"', 'id="turns"', 'id="suggest-menu"',
+                   'id="drawer"', 'id="splitter"', 'role="separator"', "<dialog", "data-theme"):
+        assert needle in page, needle
+    assert 'id="chips"' not in page, "the old chips row must be gone"
+    assert "card-btn" in page and "Ver perguntas sugeridas" not in page, "empty state shows selectable suggestion boxes, not a button"
+    for gone in ("pcard", "ocard", "qcard", "cards-toggle", "viewModels"):
+        assert gone not in page, f"answer cards were removed: {gone}"
+    assert "innerHTML" not in page, "model output must only enter the DOM as text"
+    external = set(re.findall(r"https?://[^\s\"'<>)]+", page))
+    assert external <= {"https://platform.openai.com/api-keys", "http://www.w3.org/2000/svg"}, external
+    assert "fonts.googleapis" not in page and "<link" not in page
+
+
 def test_no_order_sample_for_private_source():
     srv = web.create_server({"original": web.Source("Originais", DEMO, True)}, "original", port=0, environ={})
     try:
@@ -317,6 +465,29 @@ def test_pasted_key_is_kept_in_memory_only_and_never_echoed(server, monkeypatch)
     assert seen.get("api_key") == PASTED
     status, _, _ = call(server, "POST", "/api/key", {"key": ""})
     assert status == 200 and json.loads(call(server, "GET", "/api/config")[2])["key_source"] == "none"
+
+
+def test_openai_client_is_reused_across_conversations_and_rebuilt_when_the_key_changes(server, monkeypatch):
+    built = []
+
+    class Counting:
+        def __init__(self, **kwargs):
+            built.append(kwargs["api_key"])
+            self.responses = self
+
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", Counting)
+    app = server.app
+    app.client_factory = None
+    app.environ = {}
+    call(server, "POST", "/api/key", {"key": "first-pasted-credential-123"})
+    chat(server, "oi", mode="llm", session="a1" * 8)
+    chat(server, "oi", mode="llm", session="a2" * 8)
+    chat(server, "oi", mode="llm", session="a3" * 8)
+    assert built == ["first-pasted-credential-123"], "one client (one connection pool) for all conversations"
+    call(server, "POST", "/api/key", {"key": "second-pasted-credential-456"})
+    chat(server, "oi", mode="llm", session="a4" * 8)
+    assert built == ["first-pasted-credential-123", "second-pasted-credential-456"]
 
 
 def test_key_endpoint_validates_and_guards(server):
