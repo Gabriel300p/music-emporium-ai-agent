@@ -1,8 +1,13 @@
-"""Read-only, deterministic lookup over CSV snapshots.
+"""Read-only, deterministic queries over the supplied relational CSV snapshots.
 
-IMPORTANT: The source business schema was not provided with the assignment PDF.
-Aliases and joins here are educated defaults. Validate these assumptions against
-actual data before delivering the challenge.
+Original joins, validated against the challenge dataset:
+products.category_id -> categories.category_id
+promotions.product_id -> products.product_id
+orders.customer_id -> customers.customer_id
+order_items.order_id -> orders.order_id
+order_items.product_id -> products.product_id
+
+Nothing writes to source data. Personal customer fields are never returned by tools.
 """
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ import csv
 import re
 import unicodedata
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -36,12 +41,15 @@ def price_number(value: Any) -> Decimal | None:
     elif "," in s:
         s = s.replace(".", "").replace(",", ".")
     elif "." in s and re.fullmatch(r"\d{1,3}(?:\.\d{3})+", s):
-        # Brazilian thousands-only notation, e.g. R$ 1.200 (not 1.20).
         s = s.replace(".", "")
     try:
         return Decimal(s)
     except InvalidOperation:
         return None
+
+
+def amount(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def quantity(value: Any) -> int | None:
@@ -52,7 +60,7 @@ def quantity(value: Any) -> int | None:
         return 0
     try:
         return int(float(str(value).replace(",", ".")))
-    except (ValueError, TypeError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -65,133 +73,221 @@ class Table:
 
 def first(row: dict[str, str], *keys: str) -> str:
     for key in keys:
-        val = row.get(norm(key), "")
-        if str(val).strip():
-            return str(val).strip()
+        value = row.get(norm(key), "")
+        if str(value).strip():
+            return str(value).strip()
     return ""
 
 
 def read_csv(path: Path) -> Table:
-    raw: str | None = None
+    raw = None
     for enc in ("utf-8-sig", "utf-8", "cp1252"):
         try:
             raw = path.read_text(encoding=enc)
             break
         except UnicodeDecodeError:
-            pass
+            continue
     if raw is None:
-        raise ValueError(f"Could not decode CSV: {path.name}")
-    sample = raw[:4096]
+        raise ValueError(f"Could not decode {path.name}")
     try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+        dialect = csv.Sniffer().sniff(raw[:4096], delimiters=",;\t")
         delimiter = dialect.delimiter
     except csv.Error:
-        delimiter = ";" if sample.count(";") > sample.count(",") else ","
+        delimiter = ";" if raw[:4096].count(";") > raw[:4096].count(",") else ","
     reader = csv.DictReader(raw.splitlines(), delimiter=delimiter)
     if not reader.fieldnames:
         return Table(path.stem, (), ())
-    mapping = {k: norm(k) for k in reader.fieldnames if k is not None}
-    normalized_rows = []
+    mapping = {key: norm(key) for key in reader.fieldnames if key is not None}
+    rows = []
     for row in reader:
         if not row or not any(str(v or "").strip() for v in row.values()):
             continue
-        normalized_rows.append({mapping[k]: str(v or "").strip() for k, v in row.items() if k in mapping})
-    return Table(path.stem, tuple(mapping.values()), tuple(normalized_rows))
+        rows.append({mapping[key]: str(value or "").strip() for key, value in row.items() if key in mapping})
+    return Table(path.stem, tuple(mapping.values()), tuple(rows))
+
+
+# Portuguese morphological variants: "violão" vs "violões" cannot be matched with
+# simple substring logic, so canonicalize user category requests before matching.
+CATEGORY_ALIASES = {
+    "violao": "viol", "violoes": "viol", "viol": "viol",
+    "guitarra": "guitarr", "guitarras": "guitarr",
+    "baixo": "baix", "baixos": "baix",
+    "bateria": "bateri", "baterias": "bateri", "percussao": "percuss",
+    "teclado": "teclad", "teclados": "teclad", "piano": "piano", "pianos": "piano",
+    "ukulele": "ukulel", "ukuleles": "ukulel",
+    "sopro": "sopro", "madeiras": "madeira", "metais": "metais",
+    "cordas_orquestrais": "cordas_orquestrais",
+}
+
+
+def category_matches(requested: str, label: str) -> bool:
+    search = norm(requested)
+    hay = norm(label)
+    if not search:
+        return True
+    key = CATEGORY_ALIASES.get(search, search)
+    return key in hay or search in hay
 
 
 class CSVStore:
     def __init__(self, data_dir: str | Path):
         self.data_dir = Path(data_dir)
-        self.tables = {p.stem: read_csv(p) for p in sorted(self.data_dir.glob("*.csv"))}
-        self.products = self._find(("produt", "product", "catalog", "estoque", "inventory"), {"preco", "price"})
-        self.orders = self._find(("pedido", "order", "venda"), {"status", "situacao"})
-        self.customers = self._find(("cliente", "customer"), {"email", "e_mail"})
+        self.tables = {path.stem: read_csv(path) for path in sorted(self.data_dir.glob("*.csv"))}
+        self.products = self._find(("products", "produtos", "product", "produto"), {"product_id", "price_brl", "price"})
+        self.orders = self._find(("orders", "pedidos", "order", "pedido"), {"order_id", "status"})
+        self.customers = self._find(("customers", "clientes", "customer", "cliente"), {"customer_id", "email"})
+        self.categories = self._find(("categories", "categorias", "category", "categoria"), {"category_id"})
+        self.promotions = self._find(("promotions", "promocoes", "promotion", "promocao"), {"promotion_id"})
+        self.order_items = self._find(("order_items", "itens_pedido", "itens_pedidos"), {"order_id", "product_id", "quantity"})
+        self.categories_by_id = {first(r, "category_id", "id_categoria"): first(r, "name", "nome") for r in (self.categories.rows if self.categories else [])}
+        self.products_by_id = {first(r, "product_id", "id_produto"): r for r in (self.products.rows if self.products else [])}
+        self.customers_by_id = {first(r, "customer_id", "id_cliente"): r for r in (self.customers.rows if self.customers else [])}
+        self.active_promotions: dict[str, dict[str, str]] = {}
+        for r in (self.promotions.rows if self.promotions else []):
+            if norm(first(r, "is_active", "ativo")) in {"1", "true", "sim", "yes"}:
+                pid = first(r, "product_id", "id_produto")
+                percent = price_number(first(r, "discount_percent", "desconto_percentual"))
+                if percent is not None and 0 < percent < 100:
+                    # If duplicates exist, don't stack percentages; first valid active record wins.
+                    self.active_promotions.setdefault(pid, r)
 
     def _find(self, filename_tokens: tuple[str, ...], column_hints: set[str]) -> Table | None:
+        # Prefer exact table names ("orders" must never resolve to "order_items").
+        for part in filename_tokens:
+            for t in self.tables.values():
+                if norm(t.name) == part:
+                    return t
+        for part in filename_tokens:
+            for t in self.tables.values():
+                if norm(t.name).startswith(part + "_"):
+                    return t
         for t in self.tables.values():
-            if any(part in norm(t.name) for part in filename_tokens):
-                return t
-        for t in self.tables.values():
-            if t.columns and any(h in t.columns for h in column_hints):
+            if t.columns and column_hints.issubset(set(t.columns)):
                 return t
         return None
 
     def inspect(self) -> dict[str, Any]:
-        """Only schema and row counts; never output customer records."""
+        """Never display customer rows; only schema and counts."""
         return {
             "data_dir": str(self.data_dir),
             "tables": [{"file": t.name + ".csv", "rows": len(t.rows), "columns": list(t.columns)} for t in self.tables.values()],
-            "recognized": {"products": self.products.name if self.products else None,
-                           "orders": self.orders.name if self.orders else None,
-                           "customers": self.customers.name if self.customers else None},
+            "recognized": {label: table.name if table else None for label, table in (
+                ("products", self.products), ("categories", self.categories),
+                ("promotions", self.promotions), ("orders", self.orders),
+                ("order_items", self.order_items), ("customers", self.customers))},
+            "active_promotions": len(self.active_promotions),
         }
 
-    def search_products(self, *, query: str | None = None,
-                        category: str | None = None,
-                        max_price: float | None = None,
-                        in_stock_only: bool = False) -> dict[str, Any]:
-        if not self.products:
-            return {"status": "unavailable", "reason": "No products CSV table was recognized."}
-        if max_price is not None and (max_price < 0 or max_price > 100000000):
-            return {"status": "invalid", "reason": "Invalid price filter."}
-        selected = []
-        for row in self.products.rows:
-            title = first(row, "nome_produto", "produto", "nome", "descricao", "modelo", "product_name", "name")
-            cat = first(row, "categoria", "tipo", "grupo", "category")
-            price = price_number(first(row, "preco_venda", "preco_atual", "preco", "valor", "price"))
-            stock = quantity(first(row, "quantidade_em_estoque", "qtd_estoque", "estoque", "quantidade", "stock", "disponivel"))
-            if not title:
-                continue
-            if query:
-                tokens = [w for w in textnorm(query).split() if len(w) > 1]
-                full = textnorm(title + " " + cat + " " + first(row, "marca", "brand"))
-                if not tokens or not all(w in full for w in tokens):
-                    continue
-            if category and textnorm(category) not in textnorm(cat + " " + title):
-                continue
-            if max_price is not None and (price is None or price > Decimal(str(max_price))):
-                continue
-            if in_stock_only and (stock is None or stock <= 0):
-                continue
-            selected.append({
-                "name": title,
-                "category": cat or None,
-                "sku": first(row, "sku", "codigo_produto", "id_produto", "codigo") or None,
-                "price_brl": float(price) if price is not None else None,
-                "stock_units": stock,
-                "availability": "in_stock" if stock is not None and stock > 0 else "out_of_stock" if stock is not None else "unknown",
-            })
-        selected.sort(key=lambda item: (item["price_brl"] is None, item["price_brl"] or 0, item["name"]))
-        return {"status": "ok", "source": self.products.name + ".csv", "matches": len(selected), "products": selected[:8],
-                "note": "Snapshot from local CSV. Not a live inventory system. At most 8 results returned."}
+    def _product_details(self, row: dict[str, str]) -> dict[str, Any]:
+        title = first(row, "name", "nome_produto", "produto", "nome", "product_name", "modelo")
+        pid = first(row, "product_id", "id_produto", "sku", "codigo")
+        category_id = first(row, "category_id", "id_categoria")
+        cat = self.categories_by_id.get(category_id) or first(row, "categoria", "tipo", "category")
+        regular = price_number(first(row, "price_brl", "preco_venda", "preco_atual", "preco", "price", "valor"))
+        stock = quantity(first(row, "stock_quantity", "quantidade_em_estoque", "qtd_estoque", "estoque", "stock"))
+        catalog_status = norm(first(row, "status", "situacao") or "active")
+        available = catalog_status in {"active", "ativo"} and stock is not None and stock > 0
+        promo = self.active_promotions.get(pid) if available else None
+        discount = price_number(first(promo, "discount_percent", "desconto_percentual")) if promo else None
+        effective = regular * (Decimal(100) - discount) / Decimal(100) if regular is not None and discount else regular
+        # Store manual p.6: PIX -5% only on non-promotional products.
+        pix_price = amount(regular * Decimal("0.95")) if regular is not None and not discount else None
+        return {
+            "product_id": pid or None, "name": title, "category": cat or None,
+            "catalog_status": catalog_status, "availability": (
+                "discontinued" if catalog_status in {"discontinued", "descontinuado"} else
+                "coming_soon" if catalog_status in {"coming_soon", "em_breve"} else
+                "in_stock" if available else "out_of_stock" if stock is not None else "unknown"),
+            "stock_units": stock,
+            "regular_price_brl": amount(regular) if regular is not None else None,
+            "current_price_brl": amount(effective) if effective is not None else None,
+            "price_brl": amount(effective) if effective is not None else None,  # backward compatibility with early demo
+            "promotion_discount_percent": amount(discount) if discount is not None else None,
+            "promotion_name": first(promo, "description", "descricao") if promo else None,
+            "pix_price_brl_if_not_promotional": pix_price,
+            "note": "PIX 5% does not stack with active promotions" if discount else None,
+        }
 
-    def _email_for_order(self, row: dict[str, str]) -> str:
-        email = first(row, "email", "e_mail", "email_cliente", "cliente_email", "customer_email")
-        if email:
-            return email.lower()
-        client_id = first(row, "cliente_id", "id_cliente", "customer_id")
-        if client_id and self.customers:
-            for client in self.customers.rows:
-                if client_id == first(client, "id_cliente", "cliente_id", "customer_id", "id"):
-                    return first(client, "email", "e_mail", "email_cliente").lower()
-        return ""
+    def search_products(self, *, query: str | None = None, category: str | None = None,
+                        max_price: float | None = None, in_stock_only: bool = False) -> dict[str, Any]:
+        if not self.products:
+            return {"status": "unavailable", "reason": "Product table not loaded"}
+        if max_price is not None and (not isinstance(max_price, (int, float)) or not 0 <= max_price <= 10_000_000):
+            return {"status": "invalid", "reason": "Invalid max_price filter"}
+        query_terms = [w for w in textnorm(query).split() if len(w) > 1] if query else []
+        result: list[dict[str, Any]] = []
+        for row in self.products.rows:
+            product = self._product_details(row)
+            if not product["name"]:
+                continue
+            cat = product["category"] or ""
+            hay = textnorm(product["name"] + " " + cat + " " + first(row, "description", "descricao"))
+            if query_terms and not all(w in hay for w in query_terms):
+                continue
+            if category and not category_matches(category, cat):
+                continue
+            if in_stock_only and product["availability"] != "in_stock":
+                continue
+            current = product["current_price_brl"]
+            if max_price is not None and (current is None or Decimal(str(current)) > Decimal(str(max_price))):
+                continue
+            result.append(product)
+        result.sort(key=lambda p: (p["current_price_brl"] is None, p["current_price_brl"] or 0, p["name"]))
+        return {"status": "ok", "source": self.products.name + ".csv", "matches": len(result),
+                "products": result[:8], "truncated": len(result) > 8,
+                "note": "Local CSV snapshot (not live). Price filter uses active promotional prices, not PIX."}
+
+    def search_promotions(self) -> dict[str, Any]:
+        """Show currently flagged promotions in the CSV snapshot (no date guarantees)."""
+        if not self.products or not self.promotions:
+            return {"status": "unavailable", "reason": "Products or promotions unavailable"}
+        rows = []
+        for pid in self.active_promotions:
+            product_row = self.products_by_id.get(pid)
+            if not product_row:
+                continue
+            product = self._product_details(product_row)
+            if product["availability"] == "in_stock":
+                rows.append(product)
+        rows.sort(key=lambda item: (item["current_price_brl"] is None, item["current_price_brl"] or 0))
+        return {"status": "ok", "matches": len(rows), "products": rows[:12],
+                "source": self.promotions.name + ".csv + " + self.products.name + ".csv",
+                "note": "Only CSV is_active flag is known; no promotion start/end dates. No PIX stacking."}
 
     def order_status(self, *, order_number: str, customer_email: str) -> dict[str, Any]:
-        """Do not disclose any order details before matching the purchase email."""
-        if not order_number.strip() or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", customer_email.strip()):
-            return {"status": "verification_required", "message": "Order number and valid purchase email are required."}
-        if not self.orders:
-            return {"status": "unavailable", "message": "Order table not available. Refer customer to human support."}
+        """Prototype-only identity check. Never return PII; unknown/wrong email indistinguishable."""
+        if not str(order_number).strip() or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", str(customer_email).strip()):
+            return {"status": "verification_required", "message": "Provide order number and purchase email."}
+        if not self.orders or (not self.customers and not {"email_cliente", "customer_email", "email"}.intersection(set(self.orders.columns))):
+            return {"status": "unavailable", "message": "Order verification unavailable; human support required."}
+        submitted = str(order_number).strip().lower()
+        mail = str(customer_email).strip().casefold()
         for row in self.orders.rows:
-            id_in_data = first(row, "numero_pedido", "pedido_id", "id_pedido", "order_number", "order_id", "pedido", "id")
-            if str(id_in_data).strip().lower() != order_number.strip().lower():
+            order_id = first(row, "order_id", "numero_pedido", "id_pedido", "pedido_id", "id")
+            if order_id.strip().lower() != submitted:
                 continue
-            if self._email_for_order(row) != customer_email.strip().lower():
-                # Do not indicate if an order with a different email exists.
+            client_id = first(row, "customer_id", "cliente_id", "id_cliente")
+            client = self.customers_by_id.get(client_id, {})
+            actual_mail = (first(row, "email_cliente", "customer_email", "email") or
+                           first(client, "email", "email_cliente", "customer_email")).casefold()
+            if not actual_mail or actual_mail != mail:
                 continue
-            return {"status": "verified", "order_number": id_in_data,
-                    "order_status": first(row, "status_pedido", "status", "situacao", "etapa", "order_status") or "not_provided",
-                    "expected_delivery": first(row, "previsao_entrega", "data_prevista", "estimated_delivery") or None,
-                    "source": self.orders.name + ".csv",
-                    "note": "Local snapshot, not a realtime shipping feed."}
-        return {"status": "not_verified", "message": "Could not verify the supplied order number and email. Do not disclose order information."}
+            order_status = first(row, "status", "status_pedido", "situacao", "order_status")
+            items = []
+            for item in self.order_items.rows if self.order_items else []:
+                if first(item, "order_id", "id_pedido") != order_id:
+                    continue
+                p = self.products_by_id.get(first(item, "product_id", "id_produto"))
+                if p:
+                    items.append({"name": first(p, "name", "nome", "nome_produto"),
+                                  "quantity": quantity(first(item, "quantity", "quantidade"))})
+            return {
+                "status": "verified", "order_number": order_id,
+                "order_status": order_status or "not_provided",
+                "tracking_code": first(row, "tracking_code", "codigo_rastreio") or None,
+                "estimated_delivery": first(row, "estimated_delivery", "previsao_entrega") or None,
+                "items": items[:10],
+                "source": self.orders.name + ".csv",
+                "note": "Historical local snapshot. Email comparison is not production-grade authentication.",
+            }
+        return {"status": "not_verified", "message": "Could not verify order and purchase email. No order information disclosed."}
