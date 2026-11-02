@@ -1,4 +1,4 @@
-# Empório da Música — AI Customer Support Agent
+# Music Emporium — AI Customer Support Agent
 
 **Artefact technical case · AI Engineer / Full-Stack Applications with Generative AI**  
 **Implementation:** Python · OpenAI Responses API function calling · deterministic CSV queries · citation-based PDF retrieval · CLI
