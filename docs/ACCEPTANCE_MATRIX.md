@@ -1,20 +1,21 @@
-# Artefact assignment: acceptance traceability
+# Artefact technical-case requirements — evidence matrix
 
-| Assignment requirement | Implementation / evidence | Validation status |
+This table separates **implemented behavior**, **local test evidence** and **remaining verification**. The five recorded examples are deterministic offline runs, not hosted-LLM transcripts.
+
+| Requirement from the assignment | Where to inspect | Evidence / status |
 |---|---|---|
-| Python language | `src/emporio_agent/*.py`; `pyproject.toml` | Confirmed |
-| Persona fitting store voice | `agent.py` prompt: cordial, informal/professional, PT-BR | Prompt audited; live model not tested |
-| Text interactions | `cli.py` interactive terminal | Offline demo executed |
-| Product and stock lookups | `CSVStore.search_products()` with real joins/status | Real-data integration tests passed |
-| Prices and promotions | `Decimal` discount calculation, no PIX stacking | Real-data integration tests passed |
-| Order status | `CSVStore.order_status()` with order ID and purchase-email matching | Real-data integration tests passed; prototype-only security |
-| Policies, opening hours and returns | `PolicyIndex.search()` with source page references | Real PDF retrieval tests passed |
-| Out-of-scope questions | `agent.py` instructions + `offline.py` demo | Offline demo passed; live model not tested |
-| Technical choices justified | Root README architecture/design decisions | Documented |
-| Environment instructions | README quickstart (Python, API, CLI) | Offline mode executed |
-| Known limitations / improvements | README risks section | Documented |
-| Use of AI assistant disclosed | README AI-assistance section | Documented honestly |
-| 3–5 example conversations | Five captured demo examples | Executed offline, visibly marked non-LLM |
-| Public Git repository | Public repo `Gabriel300p/music-emporium-ai-agent`; source + sanitized public case; private manual excluded | **Published, verify current commit** |
-| Progressive Git history | Progressive commits are present on GitHub; verify with `git log` | **Published** |
-| Respond to e-mail / Google Forms | Recruiter delivery procedure | **Requires candidate action / approval** |
+| Python as primary language | `src/emporio_agent/`, `pyproject.toml` | **Implemented** |
+| Store-appropriate text persona | `src/emporio_agent/agent.py` (`SYSTEM`) | **Implemented prompt; live-model tone not tested** |
+| Text interaction | `src/emporio_agent/cli.py` | **CLI tested offline** |
+| Data lookups for stock, pricing and order | `store.py`, `tests/test_store.py`, `tests/test_case_dataset.py` | **Deterministic checks passed** |
+| Policies vs structured data | `agent.py` tool contracts, `policies.py` | **Tools implemented; actual model-routing decision not tested** |
+| Out-of-scope behavior | `agent.py`, `offline.py`, `docs/EVALUATION_PLAN.md` | **Offline demonstrator tested; live response pending** |
+| Architecture choices and justification | `README.md`, `docs/ARCHITECTURE_BRIEF.md`, `docs/DECISION_REGISTER.md` | **Documented, with candidate review provenance** |
+| Setup and execution | `README.md`, `data_public/README.md` | **Offline locally executed; clean online installation not tested** |
+| Limits and possible improvements | `README.md`, `docs/SECURITY.md`, `docs/EVALUATION_PLAN.md` | **Documented** |
+| Use of AI coding assistants | `README.md`, `docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md` | **Disclosed** |
+| Three to five example conversations | `examples/01_...` through `05_...` | **Five reproducible offline transcripts, not LLM output** |
+| Public repository with progressive commits | GitHub main branch and commit history | **Published** |
+| Recruiter delivery | Reply to the recruiter and follow the form/PDF instructions when applicable | **Separate candidate action; not a feature of this repository** |
+
+**Known gap:** No hosted-model API request has been executed, so the most important model-driven capability—selecting the appropriate tool and producing a grounded final answer—remains **unverified end to end**. See [validation](../reports/VALIDATION.md) and [evaluation plan](EVALUATION_PLAN.md).

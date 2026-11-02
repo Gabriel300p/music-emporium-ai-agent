@@ -1,47 +1,32 @@
-# Review handoff — 2026-11-02
+# Engineering handoff — current state (2026-11-02)
 
-## What was done (without changing the agent architecture)
+This is a **working record for follow-up review**, not a second project README. The public-facing explanation is in the [root README](../README.md) and the [engineering journey](../docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md).
 
-- The user chose **Strategy C: balanced engineering + applied AI**. This is a decision about process and priorities, **not** approval of every prior tool/architecture choice.
-- Added a publishable, FK-consistent dataset under `data_public/`: 65 products, 9 categories, 25 promotions, 22 order items, 20 redacted orders and 50 anonymized customers. Its one-page policy PDF is synthetic and does not replace the restricted original.
-- Added `scripts/prepare_public_data.py` to reproduce the transformation locally without any network or API key.
-- Added privacy and integrity tests (`tests/test_public_data.py`).
-- Added an architecture briefing, a real decision register, a scenario-driven evaluation plan and an independent Claude/VS Code audit prompt.
-- Updated public README and security/acceptance documentation to explicitly distinguish what is tested offline from unverified live LLM behavior.
+## Implemented and available
 
-## Candidate-requested positioning update (documentation only)
+- Python CLI with direct Responses API function-call contracts and four read-only tools.
+- CSV lookup logic for catalogue, promotions, order status and customer relation checks.
+- PDF policy retrieval, basic grounding instructions and bounded tool loop.
+- Public-safe case dataset with original non-personal catalogue rows, de-identified order/customer fields and a **synthetic one-page** policy fixture.
+- Five deterministic example transcripts and repeatable offline tests.
+- Architecture/decision notes, security limitations and a fixed scenario evaluation plan.
 
-- Added `docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md` to document how a ChatGPT-assisted workflow transformed the provided specification, six CSV tables and source-policy material into an executable Python **foundation** with offline evidence.
-- Framed prior Pandora agent-orchestration experience as a **source of methodology**, not a reused runtime or direct software dependency.
-- Included brief English interview pitches and explicit limitations: original architecture decisions were not all candidate-led; the hosted LLM was not tested; no business improvements or fully unsupervised execution were measured.
-- Linked this narrative in the README, updated the decision register (ADR-009) and added a claim-by-claim audit to the Claude/VS Code prompt.
-- **No agent implementation or architecture was changed** in this update. The narrative remains reviewable before candidate submission.
+## Verification recorded locally
 
-## Verified locally in this work session
+- 31 tests passed with original files available in a private ignored directory.
+- Public-only: 18 passed, 13 skipped because the private source data was not present.
+- No real hosted-model evaluation, clean online dependency installation, customer deployment or production metrics have been established.
 
-| Check | Result |
-|---|---|
-| Private case present: `pytest -q` | **31 passed** |
-| Original case unavailable: `pytest -q` | **18 passed, 13 skipped** (integration checks require private source files) |
-| `python -m emporio_agent inspect --data-dir data_public` | Six CSV tables loaded (9/50/22/20/65/25 rows); 4 active promotion flags |
-| `python -m emporio_agent chat --data-dir data_public --offline --trace` | Tested catalogue, exact model price and synthetic return-policy response |
-| Actual hosted LLM tool calling | **NOT TESTED** — no API key/network request |
-| Clean `pip install -e ".[dev]"` from internet | **NOT TESTED** due to runner network restrictions; local `pip install --no-build-isolation --no-deps -e .` succeeded with already-installed dependencies |
+## Open engineering gates
 
-## Privacy and source-data decision
+1. Re-run setup and tests on a clean machine or VS Code workspace.
+2. Perform an authorized, bounded live evaluation of tool selection and answer grounding.
+3. Examine failures and decide whether retrieval, orchestration or data-layer changes are justified.
+4. Replace the minimal order verification with stronger authentication before any production use.
+5. Confirm candidate understanding and sign-off for material architecture decisions before changes.
 
-Original `data/customers.csv`, `data/orders.csv` (tracking and notes) and `data/políticas_da_loja.pdf` are restricted to the candidate's local test folder. The public dataset preserves referential constraints by swapping identifiers rather than dropping linked rows. The original policy manual is eight pages and marked internal; it is **not** the one-page synthetic public PDF.
+## Attribution and source handling
 
-## Candidate approval still needed before any major change
+The first implementation was generated with ChatGPT assistance, and subsequent work included explicit human-led review direction and test/decision documentation. The separate Pandora project informed the approach conceptually; no Pandora runtime or code was integrated. Original private customer data and the restricted manual remain outside the Git repository.
 
-1. Should retrieval remain lexical, or be compared with chunked/BM25/semantic search? Start with a measured paraphrase set.
-2. Is direct Responses API tool calling adequate, or is an agent framework justified by an observed failure?
-3. Should order lookups remain a read-only prototype with a clear security caveat, or require a stronger simulated verification flow?
-4. Should we add a live provider evaluation, using the candidate's own valid API credentials and bounded budget?
-5. How should AI-assisted implementation and the candidate's later review be represented in the interview and submission?
-
-## External submission status
-
-- Public GitHub code exists at `https://github.com/Gabriel300p/music-emporium-ai-agent`.
-- The recruiter e-mail and form have not been submitted in this review session.
-- Do **not** claim this is delivered to Artefact or that the live agent has passed evaluation.
+**Submission is separate:** the candidate must review the final artifact and comply with the recruiter-provided delivery instructions. Do not change the repository after the stated submission cut-off.

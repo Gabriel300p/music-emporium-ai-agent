@@ -1,191 +1,110 @@
 # Music Emporium — AI Customer Support Agent
 
-**Artefact technical case · AI Engineer / Full-Stack Applications with Generative AI**  
-**Implementation:** Python · OpenAI Responses API function calling · deterministic CSV queries · citation-based PDF retrieval · CLI
+**Artefact · AI Engineer technical challenge · Python prototype**
 
-> **Validation status:** 31 offline tests passed with the original authorized files locally; 18 passed and 13 private-data tests were skipped on the public-only checkout. The `data_public/` tables are a sanitized, mixed-provenance supplement and its policy PDF is synthetic. **A real OpenAI API call has NOT been executed in this environment.** Do not interpret the recorded offline conversations as live LLM responses.
+A musical-instrument retailer receives repetitive questions about products, prices, availability, deliveries and store policies. This project explores how a **read-only AI assistant** can answer those questions using the right source of evidence instead of relying on a model's memory.
 
-## What this project does
+**What is delivered:** a Python agent foundation with OpenAI Responses API function calling, four controlled lookup tools, six related CSV datasets, policy-document retrieval, a CLI, automated tests and five reproducible **offline** conversation examples.
 
-This read-only text agent supports a fictional musical-instrument retailer in Campo Grande, Brazil. It answers customer questions in Brazilian Portuguese while choosing the right information source:
+> **Verification at a glance:** 31 local tests passed with the authorized original files; on a public-only checkout, 18 passed and 13 original-data tests were skipped. The hosted LLM flow is implemented **but has not been tested against the real API**. Offline examples are rule-based demonstrations, not recordings from an LLM.
 
-- Product names, categories, availability, pricing and active promotions → structured CSV lookups.
-- Order status and shipment tracking → verified `orders → customers` lookup, with the customer providing the order ID and purchase email.
-- Opening hours, returns, warranty, delivery, payment conditions and store contact → excerpts from the store-policy PDF, with page references.
-- Out-of-scope requests → courteous refusal and redirection to store-related assistance.
+## The problem and the product boundary
 
-The prototype **does not** place orders, issue refunds, cancel purchases, change inventory, write customer data or make shipment promises.
+Empório da Música, a fictional instrument store in Campo Grande, Brazil, needs help with recurring customer requests. The goal is to reduce the effort required to locate accurate information—not to let an LLM invent stock levels, change an order or make refund decisions.
 
-## Architecture
+| Customer request | Agent behavior | Source |
+|---|---|---|
+| “Quais violões disponíveis custam até R$ 1.000?” | Filter by category, current price, catalogue status and stock; show available options | `search_products` → CSVs |
+| “O Takamine GD20 está em promoção?” | Retrieve catalogue price and campaign flags; do not stack promotional and PIX discounts | `search_products` / `search_promotions` → CSVs |
+| “Onde está meu pedido?” | Request the order ID and purchase email before a **limited prototype check**; do not disclose other customers' details | `order_status` → linked CSVs |
+| “Me arrependi da compra, posso devolver?” | Find the applicable policy passage, cite its page and avoid promising an automatic refund | `search_policies` → PDF |
+| Unrelated or unsupported request | State the limitation and redirect appropriately | Scope and tool-result rules |
 
-```mermaid
-flowchart TD
-    A[Customer message / CLI] --> B[Responses API: tool calling]
-    B -->|Catalog & prices| C[search_products]
-    B -->|Active promotions| D[search_promotions]
-    B -->|Order + email| E[order_status]
-    B -->|Company rules| F[search_policies]
-    C --> G[CSV snapshots / exact filters]
-    D --> G
-    E --> H[CSV relations / limited verification]
-    F --> I[Private PDF / lexical retrieval by page]
-    G --> J[Grounded answer or uncertainty]
-    H --> J
-    I --> J
-    J --> A
-```
+The prototype **does not** take payments, modify orders, issue refunds, send messages, synchronize live inventory or access a real customer-support system.
 
-**Why a hybrid agent?** Product prices, stocks, relational joins and discounts must be computed deterministically, not retrieved by natural-language similarity. The small policy document is best handled by directly retrieving relevant source pages instead of creating a vector database and embeddings infrastructure for eight pages. The LLM decides when to call tools and composes a succinct, grounded response.
+## Run the project
 
-**Why not LangChain, an SQL agent or an autonomous ReAct loop?** There are four read-only, strictly defined functions, no actual database connection, and no need for unbounded planning. A small explicit loop is easier to reason about, test and secure. The loop is bounded to six model turns, and conversation state lives only in process memory.
-
-**LLM choice:** `gpt-4.1-mini` is a configurable default, selected as a small function-calling-capable baseline. Set `OPENAI_MODEL` to another model supported by your own API account if needed. No API cost or quality claims are made without a live test.
-
-## Installation and running
-
-Python **3.11+** required.
+Requires **Python 3.11+**. Start with the public, privacy-safe dataset; no API key is needed for inspection or offline tests.
 
 ```bash
 python -m venv .venv
-# Linux/macOS:
-source .venv/bin/activate
-# Windows PowerShell:
-# .venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-```
-
-**Option A — offline, reproducible demonstration (no API key):**
-
-```bash
-python -m emporio_agent inspect --data-dir demo_data
-python -m emporio_agent chat --data-dir demo_data --offline --trace
-pytest -q
-```
-
-The `--offline` switch invokes a **limited deterministic demonstrator**, not an LLM. It uses the same read-only CSV and PDF lookup components, and is designed for verifying source behavior without incurring API charges. Five real recorded demonstrations are in [`examples/`](examples/).
-
-**Option B — public-safe, larger case dataset:**
-
-The repository contains all **six CSV table types** under [`data_public/`](data_public/), preserving original catalogue/category/promotion/item relations while replacing customer identities, order tracking and private notes with synthetic values. The policy PDF in that folder is a **one-page synthetic demo**, not the internal eight-page source manual. See [`data_public/README.md`](data_public/README.md) for exact provenance and limitations.
-
-```bash
+# Activate .venv (Windows PowerShell: .venv\Scripts\Activate.ps1; macOS/Linux: source .venv/bin/activate)
+python -m pip install -e ".[dev]"
 python -m emporio_agent inspect --data-dir data_public
-python -m emporio_agent chat --data-dir data_public --offline --trace
-# Optional only with a valid API key and your authorization:
-# python -m emporio_agent chat --data-dir data_public --trace
-```
-
-**Option C — real LLM tool-calling agent using the privately supplied case files:**
-
-1. Put the original case files in a local `data/` directory using exactly these names: `products.csv`, `categories.csv`, `promotions.csv`, `orders.csv`, `order_items.csv`, `customers.csv`, `políticas_da_loja.pdf`.
-2. Never commit these original files to a public repository.
-3. Set your API key privately in an environment variable (the `OPENAI_API_KEY` variable). The `.env.example` is only a template; it is not automatically loaded.
-
-```bash
-# Linux/macOS:
-export OPENAI_API_KEY="<your own key>"
-export OPENAI_MODEL="gpt-4.1-mini"
-# PowerShell:
-# $env:OPENAI_API_KEY="<your own key>"
-# $env:OPENAI_MODEL="gpt-4.1-mini"
-
-python -m emporio_agent inspect --data-dir data
-python -m emporio_agent chat --data-dir data --trace
-```
-
-To record **actual** model conversations (for personal review only until validated):
-
-```bash
-python scripts/record_live_examples.py --data-dir demo_data
-# Creates live_examples_local_only/*.md (ignored by Git).
-```
-
-> A ChatGPT subscription does not automatically grant access or credits for the API. Tests and the offline demonstration run without an API key. The full LLM flow needs working network access and API credentials.
-
-## AI-assisted delivery: from brief to executable foundation
-
-This exercise is also a **process case study**: a human-provided specification, six CSV datasets and an internal policy manual became an executable Python prototype, deterministic tests, documented limitations and progressive Git commits through a **ChatGPT-assisted coding/tool workflow**. It was more than a conceptual answer; the initial foundation ran in offline checks. It was **not an independently operating production agent**, and live hosted LLM behavior is still unverified.
-
-Lessons from my separate **Pandora** agent-orchestration project informed how I think about context, tool boundaries, provenance and verification. The Pandora runtime or code was **not integrated into this exercise**. The initial foundation also exposed a governance gap: the assistant made several architecture choices before I had reviewed them. I explicitly requested a candidate-led briefing, chose the balanced engineering + applied AI strategy (C), and established decision gates before major changes.
-
-**Read the full, evidence-bounded narrative:** [AI-Assisted Engineering Case Study](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md), including a short interview pitch, verified results and explicit non-claims. The story is about turning AI-assisted execution into an inspectable engineering process, **not** claiming authorship or metrics unsupported by evidence.
-
-## Candidate-led architecture review
-
-The candidate has selected **balanced engineering and applied AI (Strategy C)**. The current direct function-calling implementation is a **provisional baseline**, not evidence that every initial architectural choice was made by the candidate. Read [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md), [`docs/DECISION_REGISTER.md`](docs/DECISION_REGISTER.md) and [`docs/EVALUATION_PLAN.md`](docs/EVALUATION_PLAN.md) before proposing major refactors.
-
-A complete [`Claude / VS Code verification prompt`](docs/CLAUDE_VSCODE_REVIEW_PROMPT.md) is included for an independent technical review. **Live LLM behavior is not yet validated.**
-
-## Original data schema and business rules
-
-The original local dataset was inspected, not inferred:
-
-| File | Records | Main role |
-|---|---:|---|
-| `products.csv` | 65 | `product_id`, `name`, `category_id`, `price_brl`, `stock_quantity`, `status` |
-| `categories.csv` | 9 | `category_id` → category display name |
-| `promotions.csv` | 25 | `product_id`, `discount_percent`, `is_active` (4 active flags) |
-| `orders.csv` | 20 | `order_id`, `customer_id`, `status`, tracking, estimated delivery |
-| `order_items.csv` | 22 | `order_id`, `product_id`, `quantity` |
-| `customers.csv` | 50 | `customer_id`, purchase e-mail for limited prototype verification |
-| `políticas_da_loja.pdf` | 8 pages | Store policy manual v2.1 (June 2025), kept private |
-
-Validated joins: `products.category_id → categories.category_id`, `promotions.product_id → products.product_id`, `orders.customer_id → customers.customer_id`, and `order_items → orders/products`.
-
-**Pricing:** Current price uses a CSV promotion only when `is_active` is true and the product is available. `Decimal` arithmetic calculates the discounted amount with half-up rounding to cents. Regular price, current price and percentage are returned together. The 5% PIX discount is calculated **only for non-promotional products**, per the policy manual; discounts do not stack. The budget filter uses the **current promotional price**, not the optional PIX price.
-
-**Availability:** Products must have `status=active` and `stock_quantity > 0`. `discontinued`, `coming_soon` and zero-quantity products are never marked in stock. All availability is based on a **CSV snapshot**, not real-time stock.
-
-**Policy retrieval:** The `pypdf` extractor builds one searchable chunk per PDF page. Accent-insensitive lexical scoring and domain-specific keyword expansion rank the passages. The tool returns original page numbers and the relevant text; no made-up policy summaries or external web knowledge are added. Unclear conflicts are escalated.
-
-## Quality assurance
-
-Run:
-
-```bash
 pytest -q
-python -m emporio_agent inspect --data-dir data
-python scripts/record_examples.py --data-dir demo_data --out-dir examples
+python -m emporio_agent chat --data-dir data_public --offline --trace
 ```
 
-Offline automated tests cover correct joins, non-cumulative discounts, currency rounding, category inflections, genuine stock status, order verification and privacy, policy page retrieval, missing data, tool calling with a mock model response, and a reproducible multi-turn demonstration.
+Try: `Quais violões disponíveis custam até R$ 1.000?` The public CSV snapshot contains **12 matching instruments**; the CLI displays up to eight at a time. Tool traces show the tool name and status without printing customer data. The `--offline` switch is a **deterministic demonstration**, not an LLM.
 
-See [`reports/VALIDATION.md`](reports/VALIDATION.md) and [`reports/REVIEW_HANDOFF_2026-11-02.md`](reports/REVIEW_HANDOFF_2026-11-02.md) for actual results and [`docs/ACCEPTANCE_MATRIX.md`](docs/ACCEPTANCE_MATRIX.md) for the evaluation-requirements checklist. **The real hosted model and full end-to-end behavior still require manual API validation.**
+To exercise actual model-driven tool selection, configure your own API credentials privately and run **without** `--offline`:
 
-## Risks, assumptions and limitations
-
-- The supplied PDF labels itself **internal/restricted**. The original internal PDF and identifiable customer/order fields are intentionally excluded. `demo_data/` contains entirely synthetic fixtures; `data_public/` contains the sanitized, relational case supplement described above.
-- The source manual has contact-channel discrepancies (pages 2 and 6) and requires careful distinction between the 30-day exchange procedure and 90-day legal warranty (pages 4 and 7). The agent is instructed to flag ambiguity rather than over-promise.
-- Comparing order ID + purchase email is a minimal prototype measure, **not secure authentication**. A production system needs an authenticated account or independent one-time verification; passing raw customer emails to an LLM provider also requires appropriate privacy controls.
-- The CSVs contain old snapshot records. The agent does not synchronize inventory, shipments or campaigns and cannot confirm historical delivery dates are still meaningful.
-- `is_active` is the only campaign-activity signal; no dates are provided. A flagged campaign is not proof of live availability today.
-- The lexical retriever can miss unusual paraphrases. It has no semantic embeddings, ranking calibration or multilingual retrieval evaluation.
-- Answers are not audited by a human in production; no ticketing, payment or order-mutation tools are implemented. The model may make errors despite grounding instructions.
-- No hosted API integration test, production security review, rate-limiting, metrics backend or load test has been performed.
-
-**With more time:** validate the actual LLM output against a curated evaluation set, add authenticated access, human-handoff workflows, tracing (latency, tool success, faithfulness), domain-specific retrieval evaluation, freshness checks and safe automated regression evaluations.
-
-## Use of AI coding assistance
-
-**Disclosure:** This prototype, its original scaffold, source-schema adaptation, tests, examples and draft documentation were created with assistance from **ChatGPT (OpenAI, GPT-6)**. AI was used for code authoring and review; Python scripts and pytest were used to execute reproducible local checks. The final candidate should personally review the implementation and be able to explain each design decision. **No live API execution or independent human review is claimed here.**
-
-The goal is a small, inspectable prototype with defensible design choices, not inflated engineering complexity. The development journey itself is documented as a separate [AI-assisted engineering case study](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md), with clear roles for ChatGPT, the candidate, Pandora-inspired practices and validation evidence.
-
-## Project structure
-
-```text
-src/emporio_agent/   # Agent, business tools, policy retrieval, CLI, offline demo
-scripts/             # Generate demo fixtures and capture demo/live conversations
-tests/               # Synthetic unit tests + optional original-data integration tests
-demo_data/           # Safe, 100% synthetic dataset and PDF for public demonstration
-examples/            # Five captured, explicitly offline demo conversations
-data/                # Private originals (ignored by Git; locally required for real case)
-docs/                # Requirement traceability, architecture/safety notes
-reports/             # Offline test results and source-data audit, no customer PII
+```bash
+# Set OPENAI_API_KEY in your environment; optionally set OPENAI_MODEL.
+python -m emporio_agent chat --data-dir data_public --trace
 ```
 
-## Delivery and GitHub publication
+This is an **optional, unverified live path**; it requires working credentials, internet and API usage. A ChatGPT subscription does not itself include API credits. The CLI defaults to the configurable `gpt-4.1-mini` model; no quality, latency or cost benchmarks are claimed.
 
-The case requests a **public Git repository** with meaningful commit history, a README and 3–5 examples, and says not to modify the repository after submission. A public-safe repository archive and a separate **local private** package are produced by the handoff workflow. Review both before publication; never commit `data/` or a secret.
+**Using the original Artefact materials:** place `products.csv`, `categories.csv`, `promotions.csv`, `orders.csv`, `order_items.csv`, `customers.csv` and `políticas_da_loja.pdf` in the Git-ignored `data/` folder, then replace `--data-dir data_public` with `--data-dir data`. Do not commit these private originals.
 
-The assignment PDF requests replying to the recruiter e-mail with a repository URL; the recruitment e-mail additionally requests a Google Form/PDF submission. Check both channels and use the earliest defensible deadline. No publication or application submission should be reported as complete without confirmation.
+## How it works
+
+```mermaid
+flowchart TD
+    U[Customer message / CLI] --> L[LLM: choose a tool or respond]
+    L --> P[search_products]
+    L --> R[search_promotions]
+    L --> O[order_status]
+    L --> K[search_policies]
+    P --> C[CSV catalogue and stock]
+    R --> C
+    O --> D[CSV orders and customers]
+    K --> F[PDF page-level lexical retrieval]
+    C --> A[Evidence sent back to the model]
+    D --> A
+    F --> A
+    A --> L
+    L --> S[Grounded answer or stated limitation]
+```
+
+The tools are **read-only**. The model chooses *which* function to call; Python performs the catalogue joins, price arithmetic, stock filtering and order checks. Policy passages are retrieved from a PDF using lightweight, page-level lexical matching; **this is not vector search or an embeddings pipeline**. The function-calling loop is bounded and avoids arbitrary code or SQL execution.
+
+The current design is intentionally small: adding LangGraph, an SQL agent or a vector database should solve a **measured limitation**, not merely increase the technology count. See [architecture and trade-offs](docs/ARCHITECTURE_BRIEF.md) and the [decision record](docs/DECISION_REGISTER.md).
+
+## Evidence and limitations
+
+| What was checked | Current evidence |
+|---|---|
+| Dataset integrity | Six CSV types; 65 products, 9 categories, 25 promotions, 20 orders, 22 order items and 50 customers; joins checked |
+| Catalogue and promotions | Deterministic price, stock and non-cumulative discount checks passed |
+| Policy retrieval | Original eight-page manual retrieved locally with page references; public PDF is a **one-page synthetic fixture** |
+| Automated tests | **31 passed** with original files available locally; **18 passed, 13 skipped** on public-only setup |
+| Conversation examples | **Five offline, deterministic** transcripts, generated by a script and clearly labelled |
+| Hosted LLM tool selection, answer accuracy, cost and latency | **Not yet evaluated** on the actual API |
+
+The published `data_public/` set preserves original non-personal product/category/promotion/item rows but **replaces identifying customer fields, tracking details and notes**. The source policies document is marked internal and is therefore not published. The order ID + purchase email check is useful only to demonstrate the read path; **it is not production authentication**. CSV values are snapshots, not real-time business data.
+
+Read the [test log](reports/VALIDATION.md), [12-scenario evaluation plan](docs/EVALUATION_PLAN.md), [security notes](docs/SECURITY.md) and [assignment traceability](docs/ACCEPTANCE_MATRIX.md). A live model evaluation and stronger identity verification are the main unresolved engineering tasks.
+
+## Development approach and AI assistance
+
+The first executable baseline was produced through an **AI-assisted engineering workflow**: the case brief and datasets were provided to ChatGPT, which helped generate the initial Python implementation, tests and documentation. Prior work exploring agent orchestration in the separate **Pandora** project informed the review of tool boundaries, context and verification; Pandora code or infrastructure was **not** integrated here.
+
+After the baseline was built, the candidate identified the need for **explicit architecture review and ownership**, selected a pragmatic engineering + applied AI direction and introduced a decision register and evaluation plan. Initial choices that were generated with assistance are not represented as independently candidate-designed. The next step is a reproducible technical review and a bounded live evaluation, not more unmeasured complexity.
+
+See [the development journey and evidence](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md). This disclosure is part of the assignment's requirement to explain how AI coding assistance was used.
+
+## Project navigation
+
+| Area | Contents |
+|---|---|
+| [`src/emporio_agent/`](src/emporio_agent/) | Agent loop, CLI, CSV tools, PDF retrieval, offline demo |
+| [`data_public/`](data_public/) | Public working data with documented provenance and redaction |
+| [`examples/`](examples/) | Five transparent offline example conversations |
+| [`tests/`](tests/) | Unit, data-integrity and original-data integration tests |
+| [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md) | Architecture, alternatives and rationale |
+| [`docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md`](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md) | How the initial working baseline was created and reviewed |
+| [`reports/VALIDATION.md`](reports/VALIDATION.md) | Reproducible results and what remains unverified |
+
+**Submission note:** the recruiter supplies the actual deadline and delivery channels. Review the project and do not modify the repository after submitting it, as required by the technical challenge.

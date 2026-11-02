@@ -1,34 +1,31 @@
-# Architecture decision register
+# Technical decision register
 
-This records **provenance and ownership** of decisions. A working implementation is not the same as a candidate-approved architecture. Update this register only after actual discussion and validation.
+The point of this register is to make the **implemented baseline**, its **provenance**, and the **next decision** visible. Code produced through AI assistance is not retroactively presented as a fully candidate-designed architecture.
 
-| ADR | Topic | State | Who/when | Evidence |
-|---|---|---|---|---|
-| ADR-001 | Project strategy: balanced engineering + applied AI, avoid gratuitous complexity | **Accepted** | Candidate choice on 2026-11-02 | Briefing conversation; `ARCHITECTURE_BRIEF.md` |
-| ADR-002 | Keep the current hybrid direct-function-calling implementation as a reviewable baseline | **Provisional** | Initially implemented with AI assistance | README + source/tests; requires candidate review |
-| ADR-003 | Use lexical PDF retrieval rather than vector RAG | **Provisional** | Initial implementation, not candidate-approved | Requires evidence from paraphrase retrieval evaluation |
-| ADR-004 | Retain Python CSV query functions rather than SQL agent | **Provisional** | Initial implementation, not candidate-approved | Current CSV sizes; evaluate query needs |
-| ADR-005 | Protect original identifiable customers, order tracking and internal policy PDF | **Accepted for public publication** | Safe publication decision 2026-11-02 | `data_public/README.md`, export script and privacy tests |
-| ADR-006 | Use the present CLI rather than add UI | **Provisional** | Initial implementation, not candidate-approved | Technical assignment explicitly permits CLI |
-| ADR-007 | Select final provider and model | **Open** | Candidate decision pending | No live API benchmark |
-| ADR-008 | Decide whether to invest in semantic retrieval/observability | **Open** | Candidate decision pending | Evaluation plan first |
-| ADR-009 | Use the ChatGPT-assisted transformation from source materials to tested foundation as an evidence-backed interview case, with Pandora as prior conceptual experience | **Accepted as narrative direction; specific claims remain subject to review** | Candidate request 2026-11-02 | `AI_ASSISTED_ENGINEERING_CASE_STUDY.md` + commit/test evidence; no claim of fully autonomous production execution |
+| ID | Decision area | State / owner | Reasoning and next evidence |
+|---|---|---|---|
+| ADR-001 | Balance pragmatic engineering and applied AI | **Accepted by candidate, 2026-11-02** | Prefer minimal working scope; add tools/frameworks only when evidence calls for them |
+| ADR-002 | Direct Responses API tool calling | **Implemented in AI-assisted baseline; candidate review pending** | Small read-only tool set; evaluate live tool selection before adding orchestration |
+| ADR-003 | Page-level lexical policy retrieval | **Implemented in baseline; candidate review pending** | Eight-page manual; compare chunked/BM25/hybrid only on actual retrieval misses |
+| ADR-004 | Python queries over CSV instead of SQL agent | **Implemented in baseline; candidate review pending** | Bounded source tables and deterministic arithmetic; revisit if relational complexity grows |
+| ADR-005 | Keep private source data outside public Git history | **Accepted publication constraint** | Original customer identities, tracking information and restricted PDF excluded; public test data is documented |
+| ADR-006 | CLI instead of a UI | **Implemented in baseline; candidate review pending** | CLI is permitted by the exercise and makes behavior inspectable |
+| ADR-007 | Provider/model selection | **Open** | `gpt-4.1-mini` is a configurable baseline, not an evaluated winner; compare after approved live tests |
+| ADR-008 | Stronger retrieval, agent state and observability | **Open** | Adopt only if fixed-scenario evaluation establishes a need |
+| ADR-009 | Explain AI-assisted implementation and Pandora context accurately | **Accepted as narrative direction; factual claims require evidence** | The initial scaffold was substantially AI-generated; Pandora informed approach, not code reuse |
 
-## Engineering ownership and attribution
+## Ownership rule
 
-The first executable baseline was generated with AI assistance before the candidate had reviewed every implementation decision. The candidate selected **balanced engineering + applied AI (Strategy C)** and requested a change in process: **specification → AI-assisted baseline → reproducible checks → candidate briefing → explicit architecture choices → independent review**.
+The development workflow exposed a useful constraint: an AI assistant can generate an executable foundation before its human collaborator has reviewed every technical choice. That is why the next phase is an architecture briefing and independent, reproducible review. **Strategy C is approved; individual baseline architecture choices are not automatically approved.**
 
-Documenting this workflow as an interview case does **not** retroactively make the initial design decisions candidate-authored. Pandora is referenced as prior experience and a source of engineering principles; it is not claimed to have supplied a runtime to this application.
-
-## ADR template for future candidate decisions
+Use this record for material changes:
 
 ```text
-Decision ID:
-Business/technical problem:
-Alternatives A/B/C:
-Selection and reasoning:
-Expected measurable improvement:
-Test evidence (command/output/date):
-Risks and limitations:
-Owner / approval date:
+Decision / owner / date:
+Problem and user impact:
+Alternatives and trade-offs:
+Current evidence (test, source and reproducible steps):
+Choice and why:
+Acceptance criterion:
+New limitation or risk:
 ```

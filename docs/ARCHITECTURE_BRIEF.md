@@ -1,73 +1,65 @@
-# Architecture briefing — Music Emporium AI Agent
+# Architecture and trade-offs
 
-**Candidate-led review · Draft v1 · 2026-11-02**
+**Music Emporium · Python prototype · Baseline for technical review**
 
-## 1. Business problem
+## 1. Product goal and constraints
 
-The Empório da Música staff handles repetitive questions about catalogue, pricing, stock availability, shipments and store policies. The prototype aims to answer common text messages reliably and to hand off questions that require judgment, a real-time system, or account changes.
+Create a text-based assistant for repetitive customer-service questions in a musical-instrument store. It must distinguish **structured operational facts** (catalogue, stock, orders, promotions) from **written business policies** (returns, payment, store hours), stay within its scope and avoid unauthorized changes.
 
-**Important:** The brief is a decision-support document, **not proof of performance**. The codebase already exists; decisions that were made during initial implementation must be reviewed by the candidate, rather than presented as candidate-led choices retroactively.
+The assessment requires Python and allows a CLI; the provided catalogue is small and the original policy manual is eight pages. The source CSVs are snapshots, not live operational systems. Building a full admin frontend, cloud deployment or multi-agent framework would not directly demonstrate the core requirements.
 
-## 2. Product boundaries
+## 2. Implemented baseline
 
-- Included: product and promotion lookups, limited read-only order-status checks, policy/returns/payment answers, safe refusal or handoff.
-- Excluded: payment collection, refunds, order changes, live inventory, writing customer support tickets, human-impersonation, autonomous external side effects.
-- Data reality: CSV files are historical snapshots. The complete eight-page manual is supplied internally; the public checkout contains a synthetic policy demonstration, **not** the restricted source manual.
-- Audience: Brazilian Portuguese-speaking customer, on a text/CLI prototype. CLI is a testing surface, not a production WhatsApp integration.
+```mermaid
+flowchart LR
+    A[Customer / CLI] --> B[Responses API + four tool contracts]
+    B --> C[Structured CSV functions]
+    B --> D[PDF lexical page retrieval]
+    C --> B
+    D --> B
+    B --> E[Response grounded in tool results]
+```
 
-## 3. Strategy chosen with the candidate: **C — pragmatic engineering + applied AI**
-
-Consciously keep deterministic calculations and controlled tool APIs. Reserve complexity (vector embeddings, agent frameworks, SQL, tracing platform, UI) for a measured improvement rather than to increase the tool count.
-
-| Option | Value | Main drawback | Current position |
+| Concern | Implemented mechanism | Reason | Unverified/limited |
 |---|---|---|---|
-| A. Rules-only or full context prompt | Very simple | Stale answers and prompt-bound data operations | Useful baseline, not proposed final agent |
-| B. Function calling + deterministic CSV + lexical policy retrieval | Explainable; bounded; low infrastructure | Retrieval paraphrase misses; tool-routing depends on model | **Implementation baseline** |
-| C. Framework agent + semantic RAG + SQL agent | Flexible extension path | Cost, latency and complexity without guaranteed gain | **Only if evaluation supports it** |
+| Tool selection | Responses API function calling, bounded six-turn loop | Explicit allowed tools; no arbitrary code execution | Actual hosted-model routing **not tested** |
+| Catalogue and money | Deterministic Python joins and `Decimal` calculations over CSV | No model-generated prices, stock or discounts | Snapshot freshness; no production data source |
+| Store policies | Accent-insensitive page-level lexical retrieval from PDF | Small, inspectable manual; no embedding infrastructure needed initially | Paraphrase misses and ranking quality are unmeasured |
+| Customer order | Exact order ID + purchase-email match | Demonstrates gated read-only path without returning contact fields | Not an authentication scheme for production |
+| Interaction | CLI, short-lived in-memory history | Focus on agent behavior and simple reproduction | No browser/WhatsApp integration, persistent sessions or metrics backend |
+| Offline verification | Unit tests, data-integrity tests and deterministic demonstration | Repeatable, no external API needed | Does **not** validate generated model responses |
 
-> Terminology: The **chosen process direction is Option C from the briefing (balanced engineering + AI)**, not necessarily architecture alternative C in the table above. Today's *implemented architecture* remains the B-style hybrid baseline.
+## 3. What would justify a more complex approach?
 
-## 4. Current request flow
+| Decision | Baseline | Alternative | Trigger for adopting it |
+|---|---|---|---|
+| Retrieval | Page-level lexical search | Better lexical chunking/BM25, then embeddings or hybrid retrieval | Documented paraphrase/relevance failures in the same evaluation set |
+| Orchestration | Direct tool loop | State machine, LangGraph or more explicit ReAct planning | Failed multi-step behavior or recovery needs demonstrably unsolved by the small loop |
+| Data access | Typed Python functions over CSV | SQLite / read-only SQL layer | More relational query complexity, datasets or changing source updates |
+| Model | Configurable function-calling model | Compare 2–3 supported providers/models | Measured differences in accuracy, tool use, cost and latency |
+| Interface | CLI | HTTP API or minimal web UI | A validated need for accessibility, reviewer usability or channel integration |
+| Identity | Matching two fields as a prototype | Authenticated accounts / one-time verification | Any access to real customer records in production |
 
-1. The CLI sends a message to `Agent.reply`.
-2. The LLM receives a persona/system prompt plus four JSON-schema tool contracts.
-3. It may call `search_products`, `search_promotions`, `order_status` or `search_policies`.
-4. Python tools perform read-only operations on CSV snapshots or PDF page excerpts.
-5. The tool output returns to the LLM, which drafts a customer response.
-6. The response should cite pages for policy claims, state when stock/order information is only a snapshot, and admit unknowns.
+These are **options for review**, not a claim that the candidate approved every early design decision. The initial tool-based architecture was created with AI assistance; the candidate later selected a pragmatic strategy and established explicit decision gates. See [decision register](DECISION_REGISTER.md).
 
-`--offline` uses a deterministic intent demonstrator, **not** the LLM. The two modes must never be conflated in the technical presentation.
+## 4. Reliability and responsible behavior
 
-## 5. Decisions reserved for the candidate
+- Do not provide pricing or stock without the relevant CSV lookup.
+- Promotions use the CSV `is_active` flag and never stack their discount with PIX.
+- Unavailable/discontinued products must not appear as currently for sale.
+- Orders are read-only, with a limited verification gate; do not treat email matching as identity proof.
+- Policy answers need an actual retrieved passage and page reference, and should escalate conflicts.
+- Customer records, original tracking data and the internal policy manual stay outside public Git history.
+- User messages and retrieved documents are treated as untrusted input to the model.
 
-| ID | Question | Baseline | Alternative to test | Why it matters |
-|---|---|---|---|---|
-| D1 | Tool orchestration | Direct Responses API, bounded loop | LangGraph or explicit multi-step planning | Does added state management solve a real failure? |
-| D2 | Policy retrieval | Lexical ranking per page | BM25/chunks, embeddings, hybrid reranking | Accuracy of paraphrases, citations, conflicts |
-| D3 | Structured data | Python functions reading CSV | SQLite + SQL query layer | Scale, query complexity, determinism, access control |
-| D4 | Model/provider | Configurable `gpt-4.1-mini` baseline | Other cost/latency/quality point | Choose after real API evaluation |
-| D5 | Conversation/context | In-memory history | Session IDs and summarized state | Privacy, reproducibility, cost |
-| D6 | User interface | CLI | Minimal web UI | Does UI help assess agent behavior under deadline? |
-| D7 | Order verification | Order ID + matching email | OTP/authenticated customer identity | Do not call the prototype method secure authentication |
-| D8 | Evaluation/tracing | Offline pytest + tool trace | Measured scenario suite and live calls | Evidence of tool selection, grounding, safety and cost |
+The project does not claim production-grade security, model evaluation, real-time business data or deployed customer traffic.
 
-**Status:** D1–D8 are **provisional**. No new architecture or provider has been approved. The candidate should prioritize D2, D4 and D8 after the review.
+## 5. Evaluation-led next steps
 
-## 6. What we can substantiate today
+The first priority is to validate the actual hosted model on a fixed set of scenarios before changing architecture. The [evaluation plan](EVALUATION_PLAN.md) defines test cases for tool choice, faithfulness to data and policies, disclosure avoidance and off-scope handling. Only after observing specific failures should the implementation compare retrieval or orchestration alternatives.
 
-- The code runs with synthetic and sanitized CSV snapshots, and local deterministic tests are reproducible.
-- Formula-based prices, stock flags and FK joins can be checked by test assertions.
-- Source-PDF pages can be retrieved locally when the original is available; public demo policy is synthetic.
-- No live LLM request, model-route accuracy score, latency benchmark, or per-call cost has been measured in this work session.
+An implementation is not a design decision in itself: for future changes, record the **problem → options → evidence → choice → acceptance test → owner**. This is the human review gate introduced after the AI-assisted baseline.
 
-## 7. How to present this in an interview (without invented claims)
+## 6. Connection to Artefact's public engineering practice (external context)
 
-Explain: **problem → considered alternatives → chosen constraint → observed evidence → remaining risk**. Example answer template:
-
-> “For structured catalogue data, I chose deterministic functions so the model cannot compute prices or availability from memory. For the short policy manual, I started with page-level lexical retrieval. I'd only add embeddings after showing retrieval failures on a small evaluation set. At this stage I can demonstrate passing offline tests, but live model routing and response quality still need validation.”
-
-State clearly that ChatGPT assisted with the first implementation, and identify which choices were reviewed or changed by the candidate during the subsequent briefing. **Do not claim metrics or authorship that were not observed.**
-
-## 8. Briefing approval gate
-
-Before an architecture change, record: (1) user/customer failure; (2) option A/B/C considered; (3) expected result; (4) acceptance criterion; (5) estimated implementation and evaluation effort; (6) candidate approval. Low-risk documentation and test-fixture improvements may proceed independently.
+Artefact's published work on [Groupe Barrière](https://www.artefact.com/cases/groupe-barriere-launching-the-first-tailor-made-generative-agents-kicking-off-groupe-barrieres-ai-roadmap/) discusses retrieval quality, user adoption and iterative response evaluation. Its [Chancerygate case](https://www.artefact.com/cases/how-chancerygate-built-four-claude-powered-agents-in-two-weeks-then-20-more-on-its-own-with-artefact/) describes rapid agent development paired with ownership and knowledge transfer. These are **Artefact's client results**, not evidence of this prototype's outcomes. The comparison reinforces a common engineering principle: fast prototyping is useful, but adoption and confidence require validation and responsibility.
