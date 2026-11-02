@@ -102,6 +102,14 @@ python scripts/record_live_examples.py --data-dir demo_data
 
 > A ChatGPT subscription does not automatically grant access or credits for the API. Tests and the offline demonstration run without an API key. The full LLM flow needs working network access and API credentials.
 
+## AI-assisted delivery: from brief to executable foundation
+
+This exercise is also a **process case study**: a human-provided specification, six CSV datasets and an internal policy manual became an executable Python prototype, deterministic tests, documented limitations and progressive Git commits through a **ChatGPT-assisted coding/tool workflow**. It was more than a conceptual answer; the initial foundation ran in offline checks. It was **not an independently operating production agent**, and live hosted LLM behavior is still unverified.
+
+Lessons from my separate **Pandora** agent-orchestration project informed how I think about context, tool boundaries, provenance and verification. The Pandora runtime or code was **not integrated into this exercise**. The initial foundation also exposed a governance gap: the assistant made several architecture choices before I had reviewed them. I explicitly requested a candidate-led briefing, chose the balanced engineering + applied AI strategy (C), and established decision gates before major changes.
+
+**Read the full, evidence-bounded narrative:** [AI-Assisted Engineering Case Study](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md), including a short interview pitch, verified results and explicit non-claims. The story is about turning AI-assisted execution into an inspectable engineering process, **not** claiming authorship or metrics unsupported by evidence.
+
 ## Candidate-led architecture review
 
 The candidate has selected **balanced engineering and applied AI (Strategy C)**. The current direct function-calling implementation is a **provisional baseline**, not evidence that every initial architectural choice was made by the candidate. Read [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md), [`docs/DECISION_REGISTER.md`](docs/DECISION_REGISTER.md) and [`docs/EVALUATION_PLAN.md`](docs/EVALUATION_PLAN.md) before proposing major refactors.
@@ -161,7 +169,7 @@ See [`reports/VALIDATION.md`](reports/VALIDATION.md) and [`reports/REVIEW_HANDOF
 
 **Disclosure:** This prototype, its original scaffold, source-schema adaptation, tests, examples and draft documentation were created with assistance from **ChatGPT (OpenAI, GPT-6)**. AI was used for code authoring and review; Python scripts and pytest were used to execute reproducible local checks. The final candidate should personally review the implementation and be able to explain each design decision. **No live API execution or independent human review is claimed here.**
 
-The goal is a small, inspectable prototype with defensible design choices, not inflated engineering complexity.
+The goal is a small, inspectable prototype with defensible design choices, not inflated engineering complexity. The development journey itself is documented as a separate [AI-assisted engineering case study](docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md), with clear roles for ChatGPT, the candidate, Pandora-inspired practices and validation evidence.
 
 ## Project structure
 
