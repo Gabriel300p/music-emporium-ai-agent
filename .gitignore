@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 .pytest_cache/
@@ -6,7 +8,13 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-# Original challenge data may contain personal/customer data. NEVER push actual PII publicly.
-data/*.csv
-data/*.pdf
+.coverage
+htmlcov/
+.DS_Store
+# Original internal case files, including customer records and restricted policies.
+data/**
 !data/.gitkeep
+# Never publish unreviewed live transcripts, potentially with private data.
+live_examples_local_only/
+reports/private/
+private_notes/

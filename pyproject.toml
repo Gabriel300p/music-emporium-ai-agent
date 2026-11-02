@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "emporio-agent-artefact"
-version = "0.1.0"
-description = "Read-only customer support agent: CSV tools + PDF policy retrieval + LLM"
+version = "1.0.0"
+description = "Read-only AI support agent using structured CSV tools and cited policy PDF retrieval"
 requires-python = ">=3.11"
 dependencies = ["openai>=2.0,<4.0", "pypdf>=5.0,<7.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<11"]
+dev = ["pytest>=8,<11", "reportlab>=4.0,<5.0"]
 
 [project.scripts]
 emporio-agent = "emporio_agent.cli:main"

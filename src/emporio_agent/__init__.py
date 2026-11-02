@@ -1,2 +1,2 @@
-"""Empório da Música — customer support agent proof of concept."""
-__version__ = "0.1.0"
+"""Empório da Música — read-only customer support prototype."""
+__version__ = "1.0.0"
