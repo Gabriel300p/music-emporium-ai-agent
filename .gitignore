@@ -18,3 +18,4 @@ data/**
 live_examples_local_only/
 reports/private/
 private_notes/
+eval_results*.json
