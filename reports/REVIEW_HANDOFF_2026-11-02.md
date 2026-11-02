@@ -9,6 +9,14 @@
 - Added an architecture briefing, a real decision register, a scenario-driven evaluation plan and an independent Claude/VS Code audit prompt.
 - Updated public README and security/acceptance documentation to explicitly distinguish what is tested offline from unverified live LLM behavior.
 
+## Candidate-requested positioning update (documentation only)
+
+- Added `docs/AI_ASSISTED_ENGINEERING_CASE_STUDY.md` to document how a ChatGPT-assisted workflow transformed the provided specification, six CSV tables and source-policy material into an executable Python **foundation** with offline evidence.
+- Framed prior Pandora agent-orchestration experience as a **source of methodology**, not a reused runtime or direct software dependency.
+- Included brief English interview pitches and explicit limitations: original architecture decisions were not all candidate-led; the hosted LLM was not tested; no business improvements or fully unsupervised execution were measured.
+- Linked this narrative in the README, updated the decision register (ADR-009) and added a claim-by-claim audit to the Claude/VS Code prompt.
+- **No agent implementation or architecture was changed** in this update. The narrative remains reviewable before candidate submission.
+
 ## Verified locally in this work session
 
 | Check | Result |
