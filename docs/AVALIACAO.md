@@ -13,19 +13,20 @@ O que foi medido, como, e o que **não** foi. Cada número aqui vem de um comand
 
 ## 1. Testes automáticos
 
-**101 passam e 13 são pulados** num clone público do repositório. Os 13 pulados exigem os arquivos originais privados (`data/`), que não são publicados; com eles disponíveis sob os nomes esperados, todos rodam.
+**121 passam e 13 são pulados** num clone público do repositório. Os 13 pulados exigem os arquivos originais privados (`data/`), que não são publicados; com eles disponíveis sob os nomes esperados, todos rodam.
 
-**Cobertura: 90%** do pacote `emporio_agent` (medida com `coverage`: agente 91%, CLI 88%, tabelas 91%, busca de políticas 99%, servidor 90%). O JavaScript da página não entra nessa conta. O CI exige no mínimo 85%.
+**Cobertura: 91%** do pacote `emporio_agent` (medida com `coverage`: agente 91%, CLI 88%, modo offline 96%, tabelas 91%, busca de políticas 99%, servidor 90%). O JavaScript da página não entra nessa conta. O CI exige no mínimo 85%.
 
 **Onde rodam:** o CI do GitHub executa a suíte em Linux e Windows com Python 3.11 e 3.12, roda o `ruff`, a cobertura e, num Windows, o `run.bat` de verdade (cria o ambiente, instala, sobe o servidor e responde uma pergunta no modo offline).
 
 | Arquivo | Testes | Cobre |
 |---|---:|---|
-| `test_web.py` | 42 | rotas, streaming, proteções (Host, Origin, tipo de conteúdo, tamanho), chave só em memória, exportação |
+| `test_web.py` | 45 | rotas, streaming, proteções (Host, Origin, tipo de conteúdo, tamanho), chave só em memória, exportação |
 | `test_performance.py` | 8 | índice do manual idêntico ao algoritmo original, dados compartilhados, conexão e aquecimento |
 | `test_conversation_safety.py` | 11 | limite de 3 tentativas de verificação (por conversa, offline e painel) e corte do histórico em fronteira de turno |
 | `test_agent.py` | 10 | laço do agente, streaming e caminhos de erro: JSON inválido, ferramenta desconhecida, chamadas paralelas, esgotamento de 6 voltas, falha da API |
-| `test_launchers.py`, `test_cli.py` | 8 + 5 | `run.bat` (ASCII, CRLF, sem parênteses em `echo`, sem blocos) e o terminal sobrevivendo a erro de API |
+| `test_offline_chat.py` | 15 | o modo offline responde com texto completo no tom da loja (saudação, endereço e horário, pagamento, devolução, lista com no máximo 5 itens, pedido verificado e negado, acessórios, fora do escopo) |
+| `test_launchers.py`, `test_cli.py` | 10 + 5 | `run.bat` (ASCII, CRLF, sem parênteses em `echo`, sem blocos) e o terminal sobrevivendo a erro de API |
 | `test_case_dataset.py` | 13 | junções e regras com os dados originais (pulados no clone público) |
 | `test_offline_demo.py`, `test_store.py`, `test_policies.py`, `test_public_data.py` | 5 + 5 + 3 + 4 | demonstração offline, tabelas, busca, privacidade dos dados públicos |
 

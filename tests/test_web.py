@@ -560,3 +560,32 @@ def test_serve_reports_port_in_use(capsys):
         blocker.close()
     assert code == 1
     assert "porta" in capsys.readouterr().err.lower()
+
+
+# ---------- offline pacing ----------
+
+def test_offline_answers_are_paced_and_streamed_when_pacing_is_on():
+    slept = []
+    app = web.App({"demo": web.Source("Demo", DEMO, False)}, "demo", None, None, {}, offline_pace=True, sleep=slept.append)
+    sess = app.session_for("a" * 16, "offline", "", "demo")
+    events = []
+    result = sess.run("Quais violões disponíveis custando até R$ 1.000?", emit=events.append)
+    deltas = [e["text"] for e in events if e["type"] == "delta"]
+    assert len(deltas) > 5 and "".join(deltas) == result["reply"], "the whole reply arrives as small chunks"
+    assert slept and 0.3 <= slept[0] <= 1.3, "a short 'thinking' pause comes first"
+    assert 0.6 <= sum(slept) <= 3.5, f"total artificial delay stays reasonable: {sum(slept):.2f}s"
+    kinds = [e["type"] for e in events]
+    assert kinds.index("tool") < kinds.index("delta"), "tools show before the text starts"
+
+
+def test_offline_pacing_is_off_by_default_so_tests_and_scripts_stay_instant():
+    slept = []
+    app = web.App({"demo": web.Source("Demo", DEMO, False)}, "demo", None, None, {}, sleep=slept.append)
+    sess = app.session_for("b" * 16, "offline", "", "demo")
+    events = []
+    sess.run("Oi", emit=events.append)
+    assert slept == [] and not any(e["type"] == "delta" for e in events)
+
+
+def test_the_page_states_that_offline_answers_come_from_rules():
+    assert "respostas por regras" in web.PAGE

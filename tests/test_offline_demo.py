@@ -40,7 +40,7 @@ def test_demo_order_two_turns_and_denial():
     assert "não posso apresentar" in bad and trace[0]["status"] == "not_verified"
     agent.reply("Qual o status do pedido 1001?")
     good, trace = agent.reply("Meu email é ana@example.test")
-    assert "shipped" in good and "DEMO0001" in good and trace[0]["status"] == "verified"
+    assert "enviado" in good and "DEMO0001" in good and trace[0]["status"] == "verified"
     assert "ana@example.test" not in good
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import random
 import re
 import shutil
 import socket
@@ -335,8 +336,19 @@ class Session:
     sink: list[dict[str, float]]
     endpoint_host: str
     redactor: Callable[[str], str] = redact
+    pace: bool = False
+    sleep: Callable[[float], None] = time.sleep
     turns: list[dict[str, Any]] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def _type_out(self, reply: str, emit: Callable[[dict[str, Any]], None]) -> None:
+        """Stream a rule-based reply word by word. Total artificial delay is capped, so long answers are not slow."""
+        self.sleep(random.uniform(0.2, 0.5))
+        words = re.findall(r"\S+\s*", reply)
+        per_word = min(0.045, 2.0 / max(len(words), 1))
+        for word in words:
+            emit({"type": "delta", "text": word})
+            self.sleep(per_word * random.uniform(0.6, 1.4))
 
     def run(self, message: str, emit: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
         """Run one turn. With `emit`, progress events (status, tool_start, tool, delta) are reported as they happen."""
@@ -351,6 +363,10 @@ class Session:
                 emit({"type": "status", "stage": "thinking"})
             if emit and self.mode == "llm":
                 reply, trace = self.agent.reply(message, on_text=lambda d: emit({"type": "delta", "text": d}))
+            elif emit and self.mode == "offline" and self.pace:
+                self.sleep(random.uniform(0.4, 0.8))  # a short "thinking" pause, as a person or a model would take
+                reply, trace = self.agent.reply(message)
+                self._type_out(reply, emit)
             else:
                 reply, trace = self.agent.reply(message)
         except Exception as exc:  # shown to the user, session stays usable
@@ -373,7 +389,9 @@ class Session:
 
 class App:
     def __init__(self, sources: Mapping[str, Source], default_source: str | None, base_url: str | None,
-                 client_factory: Callable[[], Any] | None, environ: Mapping[str, str]) -> None:
+                 client_factory: Callable[[], Any] | None, environ: Mapping[str, str], *,
+                 offline_pace: bool = False, sleep: Callable[[float], None] = time.sleep) -> None:
+        self.offline_pace, self.sleep = offline_pace, sleep  # pacing only makes the rule-based chat feel like a conversation
         self.sources = dict(sources)
         self.default_source = default_source
         self.environ = environ
@@ -499,7 +517,8 @@ class App:
             agent = Agent(data_dir, client=_Metered(client, sink), model=used_model, store=store, policies=policies)
         agent.store = _StoreProxy(agent.store, rec)
         agent.policies = _PolicyProxy(agent.policies, rec)
-        return Session(sid, mode, data_key, self.sources[data_key], used_model, agent, rec, sink, self.endpoint_host, self._redact)
+        return Session(sid, mode, data_key, self.sources[data_key], used_model, agent, rec, sink, self.endpoint_host, self._redact,
+                       self.offline_pace, self.sleep)
 
     def session_for(self, sid: str, mode: str, model: str, data_key: str) -> Session:
         with self._lock:
@@ -730,13 +749,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def create_server(sources: Mapping[str, Source], default_source: str | None, *, host: str = "127.0.0.1",
                   port: int = 8765, base_url: str | None = None, client_factory: Callable[[], Any] | None = None,
-                  environ: Mapping[str, str] | None = None) -> ThreadingHTTPServer:
+                  environ: Mapping[str, str] | None = None, offline_pace: bool = False) -> ThreadingHTTPServer:
     if host not in ("127.0.0.1", "localhost"):
         raise ValueError("A interface só aceita conexões locais (127.0.0.1).")
     server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True
     server.app = App(sources, default_source, base_url, client_factory,  # type: ignore[attr-defined]
-                     os.environ if environ is None else environ)
+                     os.environ if environ is None else environ, offline_pace=offline_pace)
     return server
 
 
@@ -761,7 +780,7 @@ def serve(*, port: int | None = None, root: Path | None = None, data_dir: str = 
     try:
         if port is None:
             port = find_free_port()
-        server = create_server(sources, default, port=port, base_url=base_url, environ=env)
+        server = create_server(sources, default, port=port, base_url=base_url, environ=env, offline_pace=True)
     except OSError as exc:
         print(f"Não foi possível abrir a porta {port}: {exc.strerror or exc}. Use --port com outro valor.", file=sys.stderr)
         return 1

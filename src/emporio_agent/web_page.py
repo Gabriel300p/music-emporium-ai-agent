@@ -488,7 +488,8 @@ function renderEndpoint(){
 }
 function renderFoot(){
   var s=selected();
-  $("#foot").textContent=s?(s.private?"Dados originais (privados)":"Dados de teste sanitizados · manual de políticas sintético"):"";
+  var base=s?(s.private?"Dados originais (privados)":"Dados de teste sanitizados · manual de políticas sintético"):"";
+  $("#foot").textContent=(mode==="offline"?"Modo offline: respostas por regras, sem modelo de linguagem":"")+(mode==="offline"&&base?" · ":"")+base;
 }
 function openDialog(id){var d=$(id);if(!d.open)d.showModal()}
 
@@ -710,7 +711,7 @@ function setMode(m,silent){
   mode=m;
   $("#mode-llm").setAttribute("aria-pressed",String(m==="llm"));
   $("#mode-offline").setAttribute("aria-pressed",String(m==="offline"));
-  renderAlerts();
+  renderAlerts();renderFoot();
   if(!silent)newChat(m==="llm"?"Modo Modelo real":"Modo Offline");
 }
 function doExport(){
@@ -743,7 +744,7 @@ loadConfig().then(function(){
   mode=keyKnown()?"llm":"offline";
   $("#mode-llm").setAttribute("aria-pressed",String(mode==="llm"));
   $("#mode-offline").setAttribute("aria-pressed",String(mode==="offline"));
-  renderAlerts();renderEmpty();renderKpis();emptyTurns();
+  renderAlerts();renderFoot();renderEmpty();renderKpis();emptyTurns();
 }).catch(function(e){$("#log").appendChild(addErrorFallback(e))});
 function addErrorFallback(e){var d=el("div","alert bad");d.appendChild(ic("alert"));d.appendChild(el("span",null,"Não consegui carregar a configuração: "+e.message));return d}
 

@@ -4,8 +4,9 @@
 
 **Customer:** Quais promoções estão ativas no momento?
 
-**Assistant:** O arquivo local marca estas promoções como ativas:
-Violão Folk Promo Demo: R$ 1.099,00 → R$ 879,20 (20% OFF).
-O desconto PIX não é cumulativo com promoções (Manual, p. 1).
+**Assistant:** Estas são as promoções ativas que encontrei:
+- **Violão Folk Promo Demo**: de R$ 1.099,00 por **R$ 879,20** (-20%)
+O desconto de PIX não se soma às promoções (Manual, p. 1).
+Quer detalhes de algum desses instrumentos?
 
 **Executed tools (name/status only):** [{"tool": "search_promotions", "status": "ok"}, {"tool": "search_policies", "status": "ok"}]

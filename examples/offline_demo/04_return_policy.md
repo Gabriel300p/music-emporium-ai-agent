@@ -4,6 +4,10 @@
 
 **Customer:** Me arrependi da compra online, posso devolver?
 
-**Assistant:** Conforme o manual, compras online podem ser devolvidas por arrependimento em até 7 dias corridos após o recebimento. Existem condições de embalagem e conservação; a equipe precisa confirmar seu caso. (Manual, p. 1).
+**Assistant:** Sobre troca e devolução, o manual da loja diz:
+
+Devolucao de compras online: 7 (sete) dias corridos apos o recebimento. Devolucao sujeita a verificacao da embalagem e da conservacao do produto. A equipe de atendimento deve confirmar casos concretos de troca ou devolucao. (Manual, p. 1)
+
+Para casos específicos, a equipe da loja confirma os detalhes. Posso ajudar com mais alguma coisa?
 
 **Executed tools (name/status only):** [{"tool": "search_policies", "status": "ok"}]

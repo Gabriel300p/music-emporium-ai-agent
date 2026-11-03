@@ -11,7 +11,7 @@ Agente de atendimento em Python para uma loja fictícia de instrumentos musicais
 - **Separação entre o modelo e o que precisa ser exato.** O modelo escolhe qual ferramenta chamar; Python faz as contas de preço, desconto e estoque, filtra produtos e verifica pedidos. O modelo não calcula nem inventa esses dados.
 - **Qualidade medida, não suposta.** Uma bateria de 28 cenários roda o modelo real (3 repetições cada) e checa a ferramenta escolhida, os valores na resposta, a privacidade e a resistência a injeção de prompt. A evolução e as falhas encontradas estão em [`docs/AVALIACAO.md`](docs/AVALIACAO.md).
 - **Honestidade sobre o que falha.** Cada limitação conhecida está documentada com o número que a sustenta, inclusive a busca de políticas, que ainda erra em paráfrases.
-- **Verificação automática em Linux e Windows.** A cada envio, o CI roda os testes nos dois sistemas, o lint, a cobertura (90%) e executa o `run.bat` num Windows de verdade.
+- **Verificação automática em Linux e Windows.** A cada envio, o CI roda os testes nos dois sistemas, o lint, a cobertura (91%) e executa o `run.bat` num Windows de verdade.
 - **Produto testável por qualquer pessoa.** Um comando instala tudo e abre uma interface web local com progresso em tempo real, texto em streaming e o painel "o que o agente consultou".
 
 ## Teste em 2 minutos
@@ -25,7 +25,7 @@ Requisito: **Python 3.11 ou mais novo** ([python.org/downloads](https://www.pyth
 
 Na primeira vez, o programa cria um ambiente isolado em `.venv/` e instala as dependências (cerca de 1 minuto, precisa de internet). Depois abre o navegador em `http://127.0.0.1:8765`. Para desfazer, apague a pasta `.venv/`.
 
-1. **Sem chave de API**, o modo **Offline** já funciona (respostas por regras simples, sem custo).
+1. **Sem chave de API**, o modo **Offline** já funciona: respostas por **regras**, sem modelo de linguagem e sem custo, com texto completo, ritmo de conversa e o aviso "respostas por regras" na tela. Serve para explorar o produto; **não demonstra a qualidade do modelo**.
 2. **Para ver o modelo de verdade**, clique em **Chave**, cole uma chave de API da OpenAI e escolha **Modelo real**. A chave fica só na memória do programa: não é gravada em arquivo, não aparece em logs nem na conversa exportada. Quem não tiver chave pode ler as [conversas reais gravadas](examples/).
 3. Clique numa sugestão da tela inicial ou use o botão **Sugestões** no campo de texto (cada uma diz o que testa).
 4. À direita, **"O que o agente consultou"** mostra, por resposta, quais fontes foram usadas, o tempo de cada chamada ao modelo e, em **Ver dados**, a saída bruta como prova.
@@ -103,7 +103,7 @@ flowchart TD
 
 | O que | Resultado | Como reproduzir |
 |---|---|---|
-| Testes automáticos (sem rede, sem chave) | **101 passam, 13 pulados** num clone público (os 13 exigem os arquivos originais privados). **Cobertura de 90%** do pacote, medida com `coverage`. Passam em Linux e Windows, Python 3.11 e 3.12 | `pytest -q` · CI |
+| Testes automáticos (sem rede, sem chave) | **121 passam, 13 pulados** num clone público (os 13 exigem os arquivos originais privados). **Cobertura de 91%** do pacote, medida com `coverage`. Passam em Linux e Windows, Python 3.11 e 3.12 | `pytest -q` · CI |
 | Bateria com o modelo real: 28 cenários × 3 repetições | **83 de 84 corretas** na última rodada; a falha é a paráfrase de política, que oscila entre rodadas (de 4 a 9 acertos em 10 repetições), então esse número não é uma garantia | `python scripts/eval_live.py --rep 3` |
 | Privacidade e segurança nessa bateria | 0 vazamentos de dado pessoal, 0 preços inventados, 0 instruções injetadas obedecidas (inclusive uma escondida no nome de um produto) | idem |
 | Tempo por resposta | 1,7 a 3,2 s no ambiente de desenvolvimento, quase todo em duas chamadas seguidas à API; cada ferramenta local leva de 0,05 a 2 ms. Rodando na máquina do autor foram observados 5 a 10 s (causa em investigação, provavelmente rede) | painel "O que o agente consultou" mostra o tempo de cada chamada |
