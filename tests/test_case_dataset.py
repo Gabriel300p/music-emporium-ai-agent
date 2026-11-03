@@ -4,6 +4,7 @@ Public repository does not include the source files. These tests skip cleanly
 without them; public synthetic demo tests remain runnable everywhere.
 """
 from pathlib import Path
+
 import pytest
 
 from emporio_agent.policies import PolicyIndex

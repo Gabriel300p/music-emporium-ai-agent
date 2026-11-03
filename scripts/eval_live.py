@@ -12,7 +12,16 @@ Usage (from the repository root):
 The key comes from OPENAI_API_KEY or from .env. Results are written to --out (ignored by Git by default name).
 Rubric limits: written by the project author, small sample, one model. It measures regressions, not "quality".
 """
-import sys, os, re, json, time, shutil, csv, tempfile, argparse, collections
+import argparse
+import collections
+import csv
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -33,6 +42,7 @@ for line in (REPO / ".env").read_text().splitlines():
 API_KEY = env["OPENAI_API_KEY"]; MODEL = env.get("OPENAI_MODEL", "gpt-4.1-mini")
 
 from openai import OpenAI
+
 from emporio_agent.agent import Agent
 
 CAP_IN, CAP_OUT = args.max_tokens_in, 60_000

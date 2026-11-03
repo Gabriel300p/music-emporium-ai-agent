@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 

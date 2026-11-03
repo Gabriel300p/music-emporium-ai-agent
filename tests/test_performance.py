@@ -69,7 +69,7 @@ def reference_search(index, question, top_k=3):
     counters = [Counter(terms(chunk.text)) for chunk in index.chunks]
     n = len(counters)
     scored = []
-    for chunk, counter in zip(index.chunks, counters):
+    for chunk, counter in zip(index.chunks, counters, strict=True):
         score = sum((1 + math.log(1 + counter[t])) * math.log(1 + (n + 1) / (1 + sum(t in c for c in counters)))
                     for t in q if counter[t] > 0)
         for triggers, pages in TOPICS:

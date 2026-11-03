@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from .policies import PolicyIndex, load_policies
-from .store import CSVStore, GuardedStore, textnorm, price_number
+from .store import CSVStore, GuardedStore, price_number, textnorm
 
 
 def brl(value: float | int | None) -> str:
@@ -55,7 +55,10 @@ class OfflineAgent:
             trace.append({"tool": "search_promotions", "status": result["status"]})
             if result["status"] != "ok" or not result["products"]:
                 return "Não encontrei promoções ativas confirmadas nos dados disponíveis.", trace
-            lines = [f"{p['name']}: {brl(p['regular_price_brl'])} → {brl(p['current_price_brl'])} ({p['promotion_discount_percent']:g}% OFF)." for p in result["products"]]
+            lines = [
+                f"{p['name']}: {brl(p['regular_price_brl'])} → {brl(p['current_price_brl'])} ({p['promotion_discount_percent']:g}% OFF)."
+                for p in result["products"]
+            ]
             policy = self.policies.search("O desconto PIX acumula com promoções?")
             trace.append({"tool": "search_policies", "status": policy["status"]})
             page = next((p["page"] for p in policy.get("results", []) if "nao" in textnorm(p["excerpt"]) and "promoc" in textnorm(p["excerpt"])), None)

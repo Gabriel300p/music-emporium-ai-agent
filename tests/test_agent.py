@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+
 from emporio_agent.agent import Agent
 
 ROOT = Path(__file__).parent / "fixtures" / "data"

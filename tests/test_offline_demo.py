@@ -1,5 +1,6 @@
 """Public, reproducible end-to-end tests on entirely synthetic records."""
 from pathlib import Path
+
 from emporio_agent.offline import OfflineAgent
 from emporio_agent.policies import PolicyIndex
 from emporio_agent.store import CSVStore

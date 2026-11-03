@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from emporio_agent.policies import PolicyIndex
 
 ROOT = Path(__file__).parent / "fixtures" / "data"

@@ -16,16 +16,17 @@ import threading
 import time
 import webbrowser
 from collections import OrderedDict
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Mapping, MutableMapping
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .agent import Agent
-from .policies import PolicyIndex, load_policies
 from .offline import OfflineAgent
+from .policies import PolicyIndex, load_policies
 from .store import CSVStore, norm
 from .web_page import PAGE
 
@@ -54,7 +55,7 @@ STATIC_SAMPLES = [
 KEY_MIN, KEY_MAX = 8, 300
 
 
-def order_example(source: "Source") -> tuple[str, str] | None:
+def order_example(source: Source) -> tuple[str, str] | None:
     """A real (order, e-mail) pair from NON-private data, so a first-time user can try the verified-order flow."""
     if source.private:
         return None
@@ -288,7 +289,7 @@ class _Metered:
             return self._stream
         raise AttributeError(name)
 
-    def _stream(self, **kwargs: Any) -> "_MeteredStream":
+    def _stream(self, **kwargs: Any) -> _MeteredStream:
         return _MeteredStream(self._inner.responses.stream(**kwargs), self._sink)
 
 
@@ -299,7 +300,7 @@ class _MeteredStream:
         self._manager, self._sink, self._stream = manager, sink, None
         self._start = time.perf_counter()
 
-    def __enter__(self) -> "_MeteredStream":
+    def __enter__(self) -> _MeteredStream:
         self._stream = self._manager.__enter__()
         return self
 

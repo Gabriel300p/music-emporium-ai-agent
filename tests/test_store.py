@@ -1,5 +1,6 @@
-from pathlib import Path
 from decimal import Decimal
+from pathlib import Path
+
 from emporio_agent.store import CSVStore, norm, price_number
 
 ROOT = Path(__file__).parent / "fixtures" / "data"

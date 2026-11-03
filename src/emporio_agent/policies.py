@@ -10,9 +10,16 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+
 from .store import norm
 
-STOP = set("a o as os de do da dos das e em um uma para por com que como meu minha seu sua no na nos nas tem posso pode qual quais quanto custa loja produto pedido sobre informacao gostaria saber".split())
+STOP = set(
+    (
+        "a o as os de do da dos das e em um uma para por com que como meu minha seu sua no na "
+        "nos nas tem posso pode qual quais quanto custa loja produto pedido sobre informacao "
+        "gostaria saber "
+    ).split()
+)
 SYNONYMS = {
     "arrependi": ("arrependimento", "devolucao", "online"),
     "devolver": ("devolucao", "arrependimento"),
@@ -72,7 +79,7 @@ class Chunk:
     text: str
 
 
-def load_policies(data_dir: str | Path) -> "PolicyIndex":
+def load_policies(data_dir: str | Path) -> PolicyIndex:
     """The manual of a data folder (accented or ASCII file name)."""
     data_dir = Path(data_dir)
     index = PolicyIndex(data_dir / "políticas_da_loja.pdf")
@@ -116,7 +123,7 @@ class PolicyIndex:
         n = len(self._counters)
         idf = {token: math.log(1 + (n + 1) / (1 + self._df[token])) for token in q}
         scored = []
-        for chunk, counter in zip(self.chunks, self._counters):
+        for chunk, counter in zip(self.chunks, self._counters, strict=True):
             score = sum((1 + math.log(1 + counter[token])) * idf[token] for token in q if counter[token] > 0)
             for triggers, pages in TOPICS:
                 if q.intersection(triggers) and chunk.page in pages:
