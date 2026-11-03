@@ -123,9 +123,9 @@ def test_policy_search_cost_is_linear_in_chunks(multipage_pdf):
 def test_agents_accept_prebuilt_store_and_policies():
     store, pol = CSVStore(DEMO), PolicyIndex(DEMO / "políticas_da_loja.pdf")
     agent = Agent(DEMO, client=SimpleNamespace(responses=None), store=store, policies=pol)
-    assert agent.store is store and agent.policies is pol
+    assert agent.store.inner is store and agent.policies is pol
     offline = OfflineAgent(DEMO, store=store, policies=pol)
-    assert offline.store is store and offline.policies is pol
+    assert offline.store.inner is store and offline.policies is pol
     assert "R$ 599,90" in offline.reply("Quais violões disponíveis custando até R$ 1.000?")[0]
 
 
@@ -148,7 +148,7 @@ def test_conversations_share_one_loaded_copy_of_the_data(monkeypatch):
     app = web.App({"demo": web.Source("Demo", DEMO, False)}, "demo", None, None, {})
     sessions = [app.session_for(f"{i:016x}", "offline", "", "demo") for i in range(1, 6)]
     assert built == {"store": 1, "policies": 1}, built
-    inner = {id(s.agent.store._inner) for s in sessions}
+    inner = {id(s.agent.store._inner.inner) for s in sessions}
     assert len(inner) == 1, "all conversations read the same immutable tables"
     # each conversation still has its own recorder/history
     assert len({id(s.rec) for s in sessions}) == 5

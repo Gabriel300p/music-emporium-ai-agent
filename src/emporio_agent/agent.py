@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .policies import PolicyIndex, load_policies
-from .store import CSVStore
+from .store import CSVStore, GuardedStore
+
+MAX_HISTORY_ITEMS = 60
 
 SYSTEM = """Você é o assistente virtual da Empório da Música, loja de instrumentos musicais
 em Campo Grande/MS. A marca diz 'Sua música começa aqui'. Atenda em português brasileiro,
@@ -84,11 +86,32 @@ TOOLS = [
 ]
 
 
+def _is_user_message(item: Any) -> bool:
+    return isinstance(item, dict) and item.get("role") == "user"
+
+
+def trim_history(items: list[Any], limit: int = MAX_HISTORY_ITEMS) -> list[Any]:
+    """Drop the oldest turns so the history stays small without ever splitting a turn.
+
+    Cutting by item count can leave a `function_call_output` without its `function_call` at the front, which the
+    API rejects, so the conversation would stay broken. The cut therefore happens only where a user message starts.
+    """
+    if len(items) <= limit:
+        return items
+    for index in range(len(items) - limit, len(items)):
+        if _is_user_message(items[index]):
+            return items[index:]
+    for index in range(len(items) - 1, -1, -1):  # one turn larger than the limit: keep it whole
+        if _is_user_message(items[index]):
+            return items[index:]
+    return items
+
+
 class Agent:
     def __init__(self, data_dir: str | Path, *, client: Any = None, model: str | None = None,
                  store: CSVStore | None = None, policies: PolicyIndex | None = None):
         # `store` and `policies` are read-only: a host serving many conversations can load them once and share them.
-        self.store = store if store is not None else CSVStore(data_dir)
+        self.store = GuardedStore(store if store is not None else CSVStore(data_dir))
         self.policies = policies if policies is not None else load_policies(data_dir)
         self.client = client
         self.model = model or os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
@@ -134,7 +157,7 @@ class Agent:
             inputs.extend(response.output)
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
-                self.history = inputs[-75:]
+                self.history = trim_history(inputs)
                 answer = (response.output_text or "").strip()
                 return answer or "Não consegui verificar isso com segurança. Vou precisar encaminhar à equipe.", trace
             for call in calls:

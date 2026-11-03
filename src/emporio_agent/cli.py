@@ -55,8 +55,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             reply, trace = agent.reply(message)
         except Exception as exc:
-            print(f"Erro ao consultar o modelo: {type(exc).__name__}. Verifique API key, modelo e conexão.")
-            return 1
+            # Only the exception type is shown: provider messages can echo parts of the key. The session continues.
+            print(f"Erro ao consultar o modelo ({type(exc).__name__}). Verifique a chave, o modelo e a conexão e tente de novo.")
+            continue
         print("Atendente> " + reply)
         if args.trace:
             print("[tools] " + json.dumps(trace, ensure_ascii=False))

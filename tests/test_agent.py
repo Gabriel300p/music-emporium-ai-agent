@@ -97,3 +97,92 @@ def test_agent_without_streaming_support_still_answers():
     deltas = []
     answer, _ = agent.reply("Quais violões até R$1.000 estão em estoque?", on_text=deltas.append)
     assert "violão" in answer and deltas == []
+
+
+# ---------- error paths of the loop ----------
+
+def _tool_call(name, arguments, call_id="c1"):
+    return SimpleNamespace(type="function_call", name=name, call_id=call_id, arguments=arguments)
+
+
+class ScriptedAPI:
+    """Returns the scripted responses in order; every create() call is recorded."""
+
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def _agent(*responses):
+    api = ScriptedAPI(*responses)
+    return Agent(ROOT, client=SimpleNamespace(responses=api)), api
+
+
+def _final(text="ok"):
+    return SimpleNamespace(output=[SimpleNamespace(type="message")], output_text=text)
+
+
+def _calling(*calls):
+    return SimpleNamespace(output=list(calls), output_text="")
+
+
+def test_invalid_tool_arguments_become_an_error_result_not_a_crash():
+    for bad in ("{not json", "[1, 2]", '"text"', "null"):
+        agent, api = _agent(_calling(_tool_call("search_products", bad)), _final())
+        answer, trace = agent.reply("oi")
+        assert answer == "ok" and trace == [{"tool": "search_products", "status": "error"}], bad
+        sent = [i for i in api.calls[1]["input"] if isinstance(i, dict) and i.get("type") == "function_call_output"]
+        assert json.loads(sent[0]["output"])["reason"] == "Invalid tool parameters"
+
+
+def test_unknown_tool_is_reported_to_the_model():
+    agent, api = _agent(_calling(_tool_call("delete_everything", "{}")), _final())
+    _, trace = agent.reply("oi")
+    assert trace == [{"tool": "delete_everything", "status": "error"}]
+
+
+def test_parallel_tool_calls_all_get_an_output():
+    agent, api = _agent(_calling(_tool_call("search_promotions", "{}", "a"), _tool_call("search_promotions", "{}", "b")), _final())
+    _, trace = agent.reply("oi")
+    ids = [i["call_id"] for i in api.calls[1]["input"] if isinstance(i, dict) and i.get("type") == "function_call_output"]
+    assert ids == ["a", "b"] and len(trace) == 2
+
+
+def test_the_loop_gives_up_after_six_rounds_with_a_safe_message():
+    agent, api = _agent(*[_calling(_tool_call("search_promotions", "{}", f"c{i}")) for i in range(6)])
+    answer, trace = agent.reply("oi")
+    assert len(api.calls) == 6 and len(trace) == 6
+    assert "equipe" in answer.lower()
+    assert agent.history == [], "an incomplete turn is not remembered"
+
+
+def test_empty_message_does_not_call_the_model():
+    agent, api = _agent()
+    assert agent.reply("   ")[0].startswith("Pode me contar")
+    assert api.calls == []
+
+
+def test_empty_model_answer_falls_back_to_a_handoff_message():
+    agent, _ = _agent(_final(""))
+    assert "equipe" in agent.reply("oi")[0].lower()
+
+
+def test_an_api_error_propagates_and_leaves_the_history_untouched():
+    agent, _ = _agent(_final("primeira"), RuntimeError("boom"), _final("terceira"))
+    agent.reply("um")
+    before = list(agent.history)
+    try:
+        agent.reply("dois")
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("the error must reach the caller")
+    assert agent.history == before
+    assert agent.reply("três")[0] == "terceira", "the conversation continues after the failure"

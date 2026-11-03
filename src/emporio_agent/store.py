@@ -291,3 +291,35 @@ class CSVStore:
                 "note": "Historical local snapshot. Email comparison is not production-grade authentication.",
             }
         return {"status": "not_verified", "message": "Could not verify order and purchase email. No order information disclosed."}
+
+
+class GuardedStore:
+    """Read-only view of a shared `CSVStore` for ONE conversation, with a limit on failed order verifications.
+
+    The tables are loaded once and shared by every conversation, so the attempt counter must not live in them.
+    After `max_failures` wrong order/e-mail pairs in a row the conversation is locked: `order_status` stops
+    consulting the tables, even for a correct pair, and sends the customer to the human team. A success resets
+    the counter; a request with missing fields is not an attempt. This is a prototype safeguard per conversation,
+    not per customer or per IP.
+    """
+
+    LOCKED_MESSAGE = ("Muitas tentativas de verificação nesta conversa. Por segurança, não vou consultar mais pedidos aqui. "
+                      "Fale com a equipe da loja para continuar.")
+
+    def __init__(self, inner: CSVStore, max_failures: int = 3):
+        self.inner = inner
+        self.max_failures = max_failures
+        self.failures = 0
+
+    def order_status(self, *, order_number: str, customer_email: str) -> dict[str, Any]:
+        if self.failures >= self.max_failures:
+            return {"status": "locked", "message": self.LOCKED_MESSAGE}
+        result = self.inner.order_status(order_number=order_number, customer_email=customer_email)
+        if result.get("status") == "verified":
+            self.failures = 0
+        elif result.get("status") == "not_verified":
+            self.failures += 1
+        return result
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)

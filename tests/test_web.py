@@ -324,6 +324,20 @@ def test_usage_reports_seconds_of_each_api_call(server):
     assert len(each) == 2 and all(isinstance(x, float) and x >= 0 for x in each)
 
 
+def test_locked_verification_shows_up_in_the_tool_panel_of_the_web_ui(server):
+    sid = "9" * 16
+    for _ in range(3):
+        chat(server, "Qual o status do pedido 1001?", session=sid)
+        chat(server, "Meu email é outra.pessoa@example.com", session=sid)
+    chat(server, "Qual o status do pedido 1001?", session=sid)
+    _, out = chat(server, "Meu email é ana@example.test", session=sid)
+    assert out["tools"][0]["output"]["status"] == "locked"
+    assert out["trace"] == [{"tool": "order_status", "status": "locked"}]
+    _, fresh = chat(server, "Qual o status do pedido 1001?", session="8" * 16)
+    _, ok = chat(server, "Meu email é ana@example.test", session="8" * 16)
+    assert ok["tools"][0]["output"]["status"] == "verified", "another conversation is not affected"
+
+
 # ---------- guards ----------
 
 def test_rejects_foreign_host(server):

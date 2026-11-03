@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from .policies import PolicyIndex, load_policies
-from .store import CSVStore, textnorm, price_number
+from .store import CSVStore, GuardedStore, textnorm, price_number
 
 
 def brl(value: float | int | None) -> str:
@@ -20,7 +20,7 @@ def brl(value: float | int | None) -> str:
 
 class OfflineAgent:
     def __init__(self, data_dir: str | Path, *, store: CSVStore | None = None, policies: PolicyIndex | None = None):
-        self.store = store if store is not None else CSVStore(data_dir)
+        self.store = GuardedStore(store if store is not None else CSVStore(data_dir))
         self.policies = policies if policies is not None else load_policies(data_dir)
         self.pending_order: str | None = None
 
@@ -39,6 +39,8 @@ class OfflineAgent:
             self.pending_order = None
             result = self.store.order_status(order_number=number, customer_email=email.group(0))
             trace.append({"tool": "order_status", "status": result["status"]})
+            if result["status"] == "locked":
+                return result["message"], trace
             if result["status"] != "verified":
                 return "Não consegui confirmar o número do pedido e o e-mail. Para sua segurança, não posso apresentar dados deste pedido.", trace
             details = f"Pedido {result['order_number']}: status '{result['order_status']}'."
