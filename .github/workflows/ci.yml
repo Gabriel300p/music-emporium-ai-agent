@@ -39,30 +39,61 @@ jobs:
       - run: coverage report --show-missing --fail-under=85
 
   lancador-windows:
-    name: Lançador run.bat (Windows)
+    name: Lançador run.bat (${{ matrix.cenario }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cenario: [pasta-local, pasta-unc-com-venv-linux, segunda-execucao]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Abrir o programa pelo run.bat e conversar no modo offline
+      - name: Preparar o cenário
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath cmd.exe -ArgumentList '/c', 'run.bat --no-browser --port 8799' `
-            -RedirectStandardOutput "$PWD\run-out.log" -RedirectStandardError "$PWD\run-err.log" -PassThru -NoNewWindow
-          $config = $null
-          for ($i = 0; $i -lt 120; $i++) {
-            Start-Sleep -Seconds 2
-            try { $config = Invoke-RestMethod -Uri http://127.0.0.1:8799/api/config -TimeoutSec 3; break } catch { }
-            if ($proc.HasExited) { break }
+          # Simula o computador de quem usa o projeto dentro do WSL: uma .venv do Linux na pasta do projeto.
+          if ('${{ matrix.cenario }}' -eq 'pasta-unc-com-venv-linux') {
+            New-Item -ItemType Directory -Force .venv/bin | Out-Null
+            Set-Content .venv/bin/python '#!/bin/sh'
+            Set-Content .venv/pyvenv.cfg 'home = /usr/bin'
           }
-          Write-Host '--- saída do run.bat'
-          Get-Content run-out.log, run-err.log -ErrorAction SilentlyContinue
-          if (-not $config) { throw 'run.bat não colocou o servidor no ar.' }
-          if ($config.default_source -ne 'public') { throw "fonte padrão inesperada: $($config.default_source)" }
-          $body = @{ session = 'aaaaaaaaaaaaaaaa'; message = 'Quanto custa o Takamine GD20?'; mode = 'offline'; model = ''; data = 'public' } | ConvertTo-Json
-          $reply = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8799/api/chat -ContentType 'application/json; charset=utf-8' -Body $body
-          Write-Host "resposta: $($reply.reply)"
-          if ($reply.reply -notmatch '2\.199') { throw 'a resposta não trouxe o preço esperado.' }
-          taskkill /PID $proc.Id /T /F | Out-Null
+          # Pasta com espaço e acento no caminho, como a de um usuário comum.
+          $dest = Join-Path $env:RUNNER_TEMP 'Meus Projetos'
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          Copy-Item -Recurse -Force . (Join-Path $dest 'música agente')
+          "PROJ=$(Join-Path $dest 'música agente')" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Abrir pelo run.bat e conversar no modo offline
+        shell: pwsh
+        run: |
+          function Start-App($path, $port) {
+            $log = Join-Path $env:RUNNER_TEMP "run-$port.log"
+            $err = Join-Path $env:RUNNER_TEMP "run-$port.err"
+            if ('${{ matrix.cenario }}' -eq 'pasta-unc-com-venv-linux') {
+              # Abre o .bat por um caminho UNC (o mesmo tipo de caminho de \\wsl.localhost\...).
+              $unc = '\\localhost\' + ($path -replace ':', '$')
+              $target = "$unc\run.bat"
+            } else { $target = "$path\run.bat" }
+            Write-Host "executando: $target"
+            $p = Start-Process cmd.exe -ArgumentList '/c', "`"$target`" --no-browser --port $port" -RedirectStandardOutput $log -RedirectStandardError $err -PassThru -NoNewWindow
+            $cfg = $null
+            for ($i = 0; $i -lt 150; $i++) {
+              Start-Sleep -Seconds 2
+              try { $cfg = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/config" -TimeoutSec 3; break } catch { }
+              if ($p.HasExited) { break }
+            }
+            Write-Host "--- saída (porta $port)"; Get-Content $log, $err -ErrorAction SilentlyContinue
+            if (-not $cfg) { throw "run.bat nao colocou o servidor no ar (porta $port)." }
+            if ($cfg.default_source -ne 'public') { throw "fonte padrao inesperada: $($cfg.default_source)" }
+            $body = @{ session = 'aaaaaaaaaaaaaaaa'; message = 'Quanto custa o Takamine GD20?'; mode = 'offline'; model = ''; data = 'public' } | ConvertTo-Json
+            $r = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/chat" -ContentType 'application/json; charset=utf-8' -Body $body
+            Write-Host "resposta: $($r.reply)"
+            if ($r.reply -notmatch '2\.199') { throw 'a resposta nao trouxe o preco esperado.' }
+            taskkill /PID $p.Id /T /F | Out-Null
+          }
+          Start-App $env:PROJ 8799
+          if ('${{ matrix.cenario }}' -eq 'segunda-execucao') {
+            Write-Host '=== segunda execucao: deve reaproveitar o ambiente, sem instalar de novo'
+            Start-App $env:PROJ 8798
+          }

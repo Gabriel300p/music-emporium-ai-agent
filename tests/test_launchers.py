@@ -45,10 +45,27 @@ def test_bat_gotos_have_labels_and_every_path_ends():
     assert "exit /b" in text.lower()
 
 
-def test_bat_survives_unc_paths_and_a_linux_virtualenv():
+def test_bat_keeps_its_environment_outside_the_project_folder():
+    """The project may sit on a WSL/UNC share that also holds a Linux .venv; a Windows venv cannot live there."""
     text = "\n".join(bat_lines()).lower()
     assert "pushd" in text and "cd /d" not in text, "cd /d fails on UNC paths such as \\\\wsl$"
-    assert ".venv\\bin" in text, "a .venv created on Linux must be reported, not silently reused"
+    assert "%localappdata%" in text and "emporioagent" in text
+    code = "\n".join(line for line in text.splitlines() if not line.startswith("rem "))
+    assert ".venv" not in code, "the project .venv (possibly created on Linux) must not be touched"
+
+
+def test_bat_does_not_use_an_editable_install_that_would_record_a_temporary_drive_letter():
+    text = "\n".join(bat_lines())
+    assert "install -e" not in text and "pip install -e" not in text
+    assert 'set "PYTHONPATH=%CD%\\src"' in text
+
+
+def test_bat_dependency_pins_match_pyproject():
+    text = "\n".join(bat_lines())
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    declared = re.search(r"^dependencies = \[(.*)\]$", pyproject, re.M).group(1)
+    for requirement in re.findall(r'"([^"]+)"', declared):
+        assert f'"{requirement}"' in text, f"run.bat must install {requirement}, as pyproject.toml declares"
 
 
 def test_bat_forces_utf8_so_accents_and_dashes_print_on_any_windows_code_page():
