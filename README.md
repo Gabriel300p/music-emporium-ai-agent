@@ -36,7 +36,7 @@ Na primeira vez, o programa cria um ambiente isolado em `.venv/` e instala as de
 
 > **Dados em uso:** `data_public/`, uma versão sanitizada (clientes anonimizados). O manual de políticas dessa pasta é um documento **sintético de uma página**; o manual interno de 8 páginas do desafio não está neste repositório.
 >
-> **Plataformas:** o `run.sh` foi testado em Linux (WSL2). O `run.bat` é executado a cada envio num Windows do GitHub Actions (cria o ambiente, instala, sobe o servidor e responde uma pergunta no modo offline). Ele **ainda não foi testado no computador do autor**. Se o `.bat` falhar no seu Windows, use os comandos manuais abaixo.
+> **Plataformas:** o `run.sh` foi testado em Linux (WSL2). O `run.bat` é executado a cada envio num Windows do GitHub Actions, em três cenários (pasta local com espaço e acento, caminho de rede estilo WSL com uma `.venv` do Linux presente, e uma segunda execução que reaproveita o ambiente). O ambiente do Windows fica em `%LOCALAPPDATA%\EmporioAgent`, fora da pasta do projeto. **Ainda não foi confirmado no computador do autor.** Se o `.bat` falhar, copie a pasta para o disco local (por exemplo `C:\projetos`) ou use os comandos manuais abaixo.
 
 <details>
 <summary>Sem o lançador: comandos manuais</summary>
