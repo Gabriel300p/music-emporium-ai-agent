@@ -23,7 +23,9 @@ O que o projeto faz para não vazar dados e o que **não** faz. Os resultados de
 
 O pedido só é consultado com **número e e-mail da compra** juntos; um par errado e um pedido inexistente recebem a mesma negação, o que não revela se o pedido existe. Na bateria: e-mail errado negado em 3 de 3 e nenhum dado liberado sem o e-mail.
 
-**Isto não é autenticação de produção.** Os números de pedido são sequenciais e não há limite de tentativas (2.000 tentativas foram processadas em 0,06 s). Em produção, exigiria conta autenticada ou verificação por código.
+**Limite de tentativas.** Antes, 2.000 verificações erradas eram processadas em 0,06 s. Agora, depois de **3 pares errados seguidos**, a conversa é bloqueada: a ferramenta deixa de consultar a tabela, mesmo para o e-mail certo, e o cliente é encaminhado à equipe. Um acerto zera o contador e um pedido sem e-mail não conta como tentativa. O contador vive **por conversa** (a tabela é compartilhada e só leitura), cobre também o modo offline e aparece no painel de consultas. Com o modelo real: com 3 falhas reais, nada do pedido foi revelado em 10 de 10 repetições.
+
+**Isto continua não sendo autenticação de produção.** Os números de pedido são sequenciais e o limite é por conversa, não por cliente nem por origem: abrir uma nova conversa zera o contador. Em produção, exigiria conta autenticada ou verificação por código.
 
 ## Injeção de prompt e extração
 

@@ -13,30 +13,37 @@ O que foi medido, como, e o que **não** foi. Cada número aqui vem de um comand
 
 ## 1. Testes automáticos
 
-**69 passam e 13 são pulados** num clone público do repositório. Os 13 pulados exigem os arquivos originais privados (`data/`), que não são publicados; com eles disponíveis sob os nomes esperados, todos rodam.
+**101 passam e 13 são pulados** num clone público do repositório. Os 13 pulados exigem os arquivos originais privados (`data/`), que não são publicados; com eles disponíveis sob os nomes esperados, todos rodam.
+
+**Cobertura: 90%** do pacote `emporio_agent` (medida com `coverage`: agente 91%, CLI 88%, tabelas 91%, busca de políticas 99%, servidor 90%). O JavaScript da página não entra nessa conta. O CI exige no mínimo 85%.
+
+**Onde rodam:** o CI do GitHub executa a suíte em Linux e Windows com Python 3.11 e 3.12, roda o `ruff`, a cobertura e, num Windows, o `run.bat` de verdade (cria o ambiente, instala, sobe o servidor e responde uma pergunta no modo offline).
 
 | Arquivo | Testes | Cobre |
 |---|---:|---|
-| `test_web.py` | 41 | rotas, streaming, proteções (Host, Origin, tipo de conteúdo, tamanho), chave só em memória, exportação |
+| `test_web.py` | 42 | rotas, streaming, proteções (Host, Origin, tipo de conteúdo, tamanho), chave só em memória, exportação |
 | `test_performance.py` | 8 | índice do manual idêntico ao algoritmo original, dados compartilhados, conexão e aquecimento |
+| `test_conversation_safety.py` | 11 | limite de 3 tentativas de verificação (por conversa, offline e painel) e corte do histórico em fronteira de turno |
+| `test_agent.py` | 10 | laço do agente, streaming e caminhos de erro: JSON inválido, ferramenta desconhecida, chamadas paralelas, esgotamento de 6 voltas, falha da API |
+| `test_launchers.py`, `test_cli.py` | 8 + 5 | `run.bat` (ASCII, CRLF, sem parênteses em `echo`, sem blocos) e o terminal sobrevivendo a erro de API |
 | `test_case_dataset.py` | 13 | junções e regras com os dados originais (pulados no clone público) |
-| `test_offline_demo.py`, `test_store.py`, `test_agent.py`, `test_policies.py`, `test_public_data.py` | 5 + 5 + 3 + 3 + 4 | demonstração offline, tabelas, laço do agente com cliente falso, busca, privacidade dos dados públicos |
+| `test_offline_demo.py`, `test_store.py`, `test_policies.py`, `test_public_data.py` | 5 + 5 + 3 + 4 | demonstração offline, tabelas, busca, privacidade dos dados públicos |
 
 ## 2. Bateria com o modelo real
 
-**Método:** 27 cenários, cada um repetido 3 vezes, sobre `data_public/` (clientes anonimizados e PDF sintético; **nada do manual interno nem de clientes originais vai à API**). Uma rubrica automática checa a ferramenta chamada e o conteúdo da resposta. Os cenários multi-turno testam o pedido no **meio** de uma conversa.
+**Método:** 28 cenários, cada um repetido 3 vezes, sobre `data_public/` (clientes anonimizados e PDF sintético; **nada do manual interno nem de clientes originais vai à API**). Uma rubrica automática checa a ferramenta chamada e o conteúdo da resposta. Os cenários multi-turno testam o pedido no **meio** de uma conversa.
 
 | Área | Cenários | Resultado |
 |---|---|---|
 | Dados | preço de um modelo, faixa de preço, promoção, PIX com promoção, produto descontinuado, produto inexistente | 3/3 em todos |
 | Políticas | devolução, endereço e horário | 3/3 |
-| Políticas por paráfrase | "Comprei pela internet e desisti, o que faço?" | 3/3 nesta rodada, **mas oscila** (veja abaixo) |
-| Pedido | e-mail errado (2 formulações), pedido sem e-mail, 6 formulações do pedido com e-mail, 2 turnos, 3 cenários após outra pergunta | 3/3 em todos |
+| Políticas por paráfrase | "Comprei pela internet e desisti, o que faço?" | **2/3** na última rodada e oscila entre rodadas (veja abaixo) |
+| Pedido | e-mail errado (2 formulações), pedido sem e-mail, 6 formulações do pedido com e-mail, 2 turnos, 3 cenários após outra pergunta, **bloqueio depois de 3 falhas** | 3/3 em todos |
 | Escopo | pergunta fora da loja, acessório que a loja não vende | 3/3 |
 | Segurança | pedido do prompt e dos e-mails, engenharia social, instrução escondida no nome de um produto | 3/3 |
-| **Total** | | **81 de 81** |
+| **Total** | | **83 de 84** |
 
-Em todas as execuções: nenhum dado pessoal vazou, nenhum preço foi inventado e nenhuma instrução injetada foi obedecida. Uma rodada completa usa cerca de 230 mil tokens.
+Em todas as execuções: nenhum dado pessoal vazou, nenhum preço foi inventado e nenhuma instrução injetada foi obedecida. Uma rodada completa usa cerca de 270 mil tokens.
 
 ### Evolução (o que a medição mudou)
 
@@ -49,7 +56,8 @@ Em todas as execuções: nenhum dado pessoal vazou, nenhum preço foi inventado 
 | Teste manual do autor | pedido falhava **depois de outra pergunta** (0 de 6) | A bateria só testava conversa nova. Corrigido com um exemplo explícito no prompt (**32 de 32** em 4 contextos) e 3 cenários multi-turno na bateria |
 | Exemplo regravado com o agente final | e-mail errado **0 de 10** | O modelo respondia que o e-mail "não corresponde" **sem chamar a ferramenta**, uma verificação que ele não fez. Achado ao ler o exemplo gravado, que a bateria não pegava por usar outra frase. Regra no prompt ("só a ferramenta sabe se confere"): **10 de 10**, com 2 cenários novos |
 | Regra nova diluiu outra | descontinuado de 10/10 para **5/10** | Um prompt mais longo enfraqueceu a regra do produto descontinuado. Regra reforçada com "OBRIGATÓRIO": **10 de 10** |
-| **Atual** | **81 de 81** (27 cenários) | Mesmo assim, veja "Limites": dois cenários oscilam |
+| Bloqueio de verificação | 4 de 5 em um cenário novo, 10 de 10 depois de corrigir a **rubrica** | O cenário supunha que o modelo chamaria a ferramenta nos 3 primeiros turnos. Uma vez ele não chamou, só houve 2 falhas reais e liberar o pedido estava certo. A rubrica passou a checar a regra (com 3 falhas reais nada é revelado) em vez de um roteiro. O bloqueio em si é determinístico e tem testes unitários |
+| **Atual** | **83 de 84** (28 cenários) | A falha é a paráfrase de política; veja "Limites": dois cenários oscilam |
 
 ### Limites desta bateria
 
@@ -77,6 +85,21 @@ Medido com o modelo real e com perfil local; o que mudou está em [`DECISOES.md`
 **Onde está o tempo.** Cada resposta custa **duas chamadas seguidas** à API (uma para o modelo escolher a fonte, outra para escrever o texto), de 0,8 a 1,4 s cada no ambiente de desenvolvimento (um sandbox com proxy de rede): 1,7 a 3,2 s por resposta. Cada ferramenta local leva menos de 3 ms. Trocar de modelo não mudou a ordem de grandeza (2,24 s, 2,27 s e 1,91 s por resposta). Ao rodar o programa na própria máquina, o autor observou **5 a 10 s** por resposta, com a primeira chamada de cada pergunta levando cerca de 6 s e a segunda cerca de 1,5 s; isso é compatível com custo de abertura de conexão na rede local, e a causa ainda não foi confirmada. O painel da interface mostra o tempo de cada chamada para separar as causas.
 
 **O que não foi otimizado, de propósito:** podar o histórico (pouco ganho de tempo e risco para a qualidade) e responder preço sem a segunda chamada (cortaria a espera, mas perderia a persona e mudaria a arquitetura).
+
+## Dívida técnica conhecida
+
+O que ainda é de protótipo e o que seria feito, em ordem de importância:
+
+| Dívida | Por que importa | O que seria feito |
+|---|---|---|
+| Busca de políticas lexical, com mapa de páginas escrito para o manual v2.1 | Falha em paráfrases (10 de 17 em 1º lugar) e só vale para esse manual | BM25 por parágrafo, medido nas mesmas 17 perguntas; embeddings só se ainda sobrar falha |
+| Verificação de pedido por e-mail, com limite só por conversa | Abrir outra conversa zera o contador | Conta autenticada ou código de verificação; limite por cliente ou por origem |
+| `web.py` com 781 linhas (servidor, sessões, proxies, exportação) | Mudar a interface fica arriscado | Dividir em módulos de servidor, sessões e exportação, sem mudar o comportamento |
+| JavaScript da página sem teste dentro do repositório | A interface é a parte menos coberta | Testes de DOM com `jsdom` num diretório de testes de front-end |
+| Sem tipagem estática nem registro estruturado de eventos | Investigar problemas em outra máquina depende de perguntar ao usuário | `mypy` no CI e logs com tempo de cada chamada |
+| `store.py` aceita nomes de coluna em português e inglês | Generalidade que nenhum dado usa | Remover os apelidos não usados |
+| Bateria com o modelo real fora do CI, com um modelo só | Regressões de prompt só aparecem quando alguém roda a bateria | Rodada agendada com segredo do repositório e teto de gasto, em mais de um modelo |
+| Sessões em memória (até 20) e processo único | Não serve além de uso local | Armazenamento externo de sessões e mais de um processo |
 
 ## Como reproduzir
 

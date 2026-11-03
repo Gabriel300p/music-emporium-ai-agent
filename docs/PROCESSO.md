@@ -27,7 +27,8 @@ O enunciado pedia um agente que decida quando consultar dados e quando consultar
 | Tarde | **Auditoria independente** (relatório privado) e primeira bateria com o modelo real | |
 | 17:28 | Interface web, lançador, ajuste de prompt e bateria no repositório | 3 |
 | 18:58 | Streaming, dados compartilhados, índice de políticas, conexão mantida, interface redesenhada | 2 |
-| Noite | Regras finais de prompt (pedido e descontinuado), exemplos regravados, consolidação dos documentos | |
+| Noite | Regras finais de prompt (pedido e descontinuado), exemplos regravados, consolidação dos documentos | 2 |
+| 03/11, tarde | Revisão de qualidade como Staff Engineer: `run.bat` corrigido e provado num Windows real, histórico, limite de tentativas, terminal, lint, cobertura e CI | 6 |
 
 **Sobre o histórico.** Os 5 primeiros commits foram feitos em 90 segundos, porque o baseline foi gerado de uma vez e commitado em seguida. Não reescrevi o histórico. O trabalho posterior está em commits incrementais, cada um dizendo o que mudou e por quê.
 
@@ -44,8 +45,12 @@ O enunciado pedia um agente que decida quando consultar dados e quando consultar
 | 7 | Dois clientes de API criados ao mesmo tempo (aquecimento × primeira pergunta) | Revisão ao implementar o aquecimento | Corrida entre duas *threads* | Trava na criação do cliente | Suíte repetida 3 vezes sem falha |
 | 8 | O modelo dizia que o e-mail "não corresponde" ao pedido **sem consultar a ferramenta** (0 de 10) | Leitura crítica do exemplo regravado | Com um e-mail que parecia falso, o modelo julgava sozinho | Regra no prompt: só a ferramenta sabe se confere; 10 de 10 | 2 cenários novos na bateria |
 | 9 | A regra nova de pedido enfraqueceu a do produto descontinuado (10/10 para 5/10) | Bateria de controle depois da mudança | Prompt mais longo diluiu a instrução anterior | Regra reforçada ("OBRIGATÓRIO"): 10 de 10 | Regra: depois de mexer no prompt, rodar a bateria inteira, não só o cenário alvo |
+| 10 | O histórico quebrava a conversa depois de cerca de 16 turnos | Revisão de qualidade: li o corte `inputs[-75:]` e simulei conversas com 0 a 2 consultas por turno | O corte por quantidade de itens deixava a saída de uma ferramenta sem a chamada no início, e a API recusa isso. Em 200 de 200 conversas simuladas | Corte só onde começa uma mensagem do usuário | 11 testes novos, incluindo 300 conversas aleatórias |
+| 11 | O `run.bat` não funcionava | Teste manual do autor no Windows | Parênteses dentro de `echo` em blocos `if`, que fecham o bloco antes da hora | Reescrito com rótulos, `pushd`, UTF-8 e aviso para `.venv` criado no Linux | Teste estático do arquivo e **CI que executa o `run.bat` num Windows real** (instala, sobe e responde) |
+| 12 | Sem limite de tentativas na verificação do pedido (2.000 em 0,06 s) | Revisão de qualidade | Nenhum contador; a tabela é compartilhada entre conversas | `GuardedStore` por conversa: bloqueio depois de 3 falhas | Testes unitários, de painel e um cenário com o modelo real (10 de 10) |
+| 13 | O terminal encerrava em qualquer erro de API e a cobertura dele era 0% | Medição de cobertura | `return 1` dentro do laço | O erro é mostrado (só o tipo, nunca o texto do provedor) e a conversa continua | 5 testes do terminal; cobertura do pacote de 83% para 90% |
 
-Dois dos achados (1 e 3) vieram de testes **manuais** e o 8 da leitura de um exemplo gravado, não da avaliação automática: um limite conhecido de qualquer rubrica escrita pelo próprio autor. O 9 mostra o outro lado: a bateria só serviu porque foi rodada inteira depois de cada mudança.
+Três dos achados (1, 3 e 11) vieram de testes **manuais** e o 8 da leitura de um exemplo gravado, não da avaliação automática: um limite conhecido de qualquer rubrica escrita pelo próprio autor. O 9 mostra o outro lado: a bateria só serviu porque foi rodada inteira depois de cada mudança. Os achados 10, 12 e 13 vieram de uma revisão de qualidade do código feita com o Claude Code, que também mediu a cobertura (83% para 90%) e acrescentou o CI. Um deles mereceu uma correção na própria bateria: o cenário do bloqueio supunha um roteiro de chamadas do modelo e passou a verificar a regra.
 
 ## Decisões que tomei
 

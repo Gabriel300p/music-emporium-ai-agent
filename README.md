@@ -1,5 +1,7 @@
 # Empório da Música · Atendente virtual
 
+[![CI](https://github.com/Gabriel300p/music-emporium-ai-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Gabriel300p/music-emporium-ai-agent/actions/workflows/ci.yml)
+
 Agente de atendimento em Python para uma loja fictícia de instrumentos musicais (Campo Grande/MS), feito para o **desafio técnico de AI Engineer da Artefact**. Um modelo de linguagem decide quando consultar o catálogo, os pedidos ou o manual de políticas da loja e responde em português com base no que as ferramentas devolveram.
 
 **Em uma tela:** [Teste em 2 minutos](#teste-em-2-minutos) · [Resultados](#resultados-medidos) · [Decisões](docs/DECISOES.md) · [Avaliação](docs/AVALIACAO.md) · [Como foi construído](docs/PROCESSO.md)
@@ -7,8 +9,9 @@ Agente de atendimento em Python para uma loja fictícia de instrumentos musicais
 ## O que este projeto demonstra
 
 - **Separação entre o modelo e o que precisa ser exato.** O modelo escolhe qual ferramenta chamar; Python faz as contas de preço, desconto e estoque, filtra produtos e verifica pedidos. O modelo não calcula nem inventa esses dados.
-- **Qualidade medida, não suposta.** Uma bateria de 27 cenários roda o modelo real (3 repetições cada) e checa a ferramenta escolhida, os valores na resposta, a privacidade e a resistência a injeção de prompt. A evolução e as falhas encontradas estão em [`docs/AVALIACAO.md`](docs/AVALIACAO.md).
+- **Qualidade medida, não suposta.** Uma bateria de 28 cenários roda o modelo real (3 repetições cada) e checa a ferramenta escolhida, os valores na resposta, a privacidade e a resistência a injeção de prompt. A evolução e as falhas encontradas estão em [`docs/AVALIACAO.md`](docs/AVALIACAO.md).
 - **Honestidade sobre o que falha.** Cada limitação conhecida está documentada com o número que a sustenta, inclusive a busca de políticas, que ainda erra em paráfrases.
+- **Verificação automática em Linux e Windows.** A cada envio, o CI roda os testes nos dois sistemas, o lint, a cobertura (90%) e executa o `run.bat` num Windows de verdade.
 - **Produto testável por qualquer pessoa.** Um comando instala tudo e abre uma interface web local com progresso em tempo real, texto em streaming e o painel "o que o agente consultou".
 
 ## Teste em 2 minutos
@@ -27,20 +30,32 @@ Na primeira vez, o programa cria um ambiente isolado em `.venv/` e instala as de
 3. Clique numa sugestão da tela inicial ou use o botão **Sugestões** no campo de texto (cada uma diz o que testa).
 4. À direita, **"O que o agente consultou"** mostra, por resposta, quais fontes foram usadas, o tempo de cada chamada ao modelo e, em **Ver dados**, a saída bruta como prova.
 
+![Tela inicial: sugestões de teste e painel do que o agente consultou](examples/screenshots/ui_inicio.png)
+
+![Pergunta de orçamento com o modelo real: resposta, fonte e painel de consultas](examples/screenshots/ui_orcamento.png)
+
 > **Dados em uso:** `data_public/`, uma versão sanitizada (clientes anonimizados). O manual de políticas dessa pasta é um documento **sintético de uma página**; o manual interno de 8 páginas do desafio não está neste repositório.
 >
-> **Plataformas:** o lançador `run.sh` foi testado em Linux (WSL2). O `run.bat` foi escrito para o Windows, mas **não foi executado em Windows**.
+> **Plataformas:** o `run.sh` foi testado em Linux (WSL2). O `run.bat` é executado a cada envio num Windows do GitHub Actions (cria o ambiente, instala, sobe o servidor e responde uma pergunta no modo offline). Ele **ainda não foi testado no computador do autor**. Se o `.bat` falhar no seu Windows, use os comandos manuais abaixo.
 
 <details>
 <summary>Sem o lançador: comandos manuais</summary>
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"             # Windows: .venv\Scripts\pip install -e ".[dev]"
+.venv/bin/pip install -e ".[dev]"
 .venv/bin/python -m emporio_agent serve       # interface web (opções: --port, --no-browser, --base-url)
 .venv/bin/python -m emporio_agent chat --data-dir data_public --offline --trace   # terminal, sem chave
 .venv/bin/python -m emporio_agent chat --data-dir data_public --trace             # terminal, com OPENAI_API_KEY
 .venv/bin/pytest -q
+```
+
+No **Windows (PowerShell)**, o equivalente é:
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\pip install -e ".[dev]"
+.venv\Scripts\python -m emporio_agent serve
 ```
 
 A chave também pode vir da variável `OPENAI_API_KEY` ou de um `.env` local (veja `.env.example`; o `.env` é ignorado pelo Git). A variável `OPENAI_BASE_URL` do ambiente é ignorada de propósito: o endpoint é `api.openai.com`, a menos que se passe `--base-url`.
@@ -88,8 +103,8 @@ flowchart TD
 
 | O que | Resultado | Como reproduzir |
 |---|---|---|
-| Testes automáticos (sem rede, sem chave) | **69 passam, 13 pulados** num clone público (os 13 exigem os arquivos originais privados) | `pytest -q` |
-| Bateria com o modelo real: 27 cenários × 3 repetições | **81 de 81 corretas** na última rodada. O cenário de paráfrase de política oscila entre rodadas (de 4 a 9 acertos em 10 repetições), então esse número não é uma garantia | `python scripts/eval_live.py --rep 3` |
+| Testes automáticos (sem rede, sem chave) | **101 passam, 13 pulados** num clone público (os 13 exigem os arquivos originais privados). **Cobertura de 90%** do pacote, medida com `coverage`. Passam em Linux e Windows, Python 3.11 e 3.12 | `pytest -q` · CI |
+| Bateria com o modelo real: 28 cenários × 3 repetições | **83 de 84 corretas** na última rodada; a falha é a paráfrase de política, que oscila entre rodadas (de 4 a 9 acertos em 10 repetições), então esse número não é uma garantia | `python scripts/eval_live.py --rep 3` |
 | Privacidade e segurança nessa bateria | 0 vazamentos de dado pessoal, 0 preços inventados, 0 instruções injetadas obedecidas (inclusive uma escondida no nome de um produto) | idem |
 | Tempo por resposta | 1,7 a 3,2 s no ambiente de desenvolvimento, quase todo em duas chamadas seguidas à API; cada ferramenta local leva de 0,05 a 2 ms. Rodando na máquina do autor foram observados 5 a 10 s (causa em investigação, provavelmente rede) | painel "O que o agente consultou" mostra o tempo de cada chamada |
 
@@ -112,13 +127,12 @@ A bateria usa `data_public/` e um modelo só. A rubrica é automática e foi esc
 ## Limitações conhecidas
 
 - **Busca de políticas lexical.** Em 17 perguntas parafraseadas sobre o manual original, a página certa ficou em 1º lugar em 10 e entre as 3 primeiras em 14; 3 voltaram vazias. Depende de um mapa de sinônimos e de páginas escrito para a versão 2.1 do manual.
-- **Autenticação de pedido fraca.** O e-mail é o único fator, os números de pedido são sequenciais e não há limite de tentativas. Serve ao protótipo, **não à produção**.
+- **Autenticação de pedido fraca.** O e-mail é o único fator e os números de pedido são sequenciais. Depois de 3 pares errados seguidos a conversa é bloqueada, mas o limite é **por conversa**: abrir uma nova conversa zera o contador. Serve ao protótipo, **não à produção**.
 - **Dados em retrato.** Sem estoque nem pedidos em tempo real; promoções só têm o indicador `is_active`, sem datas.
-- **Erro de API no terminal** (`chat`) encerra a sessão; na interface web a conversa continua. O corte do histórico por número de itens pode quebrar conversas muito longas com ferramentas (não testado).
 - **Avaliação limitada:** um modelo, 3 repetições, rubrica própria, manual sintético de 1 página nos testes com o modelo. Os cenários de paráfrase de política e de produto descontinuado oscilam entre rodadas.
 - **A interface web é uma ferramenta local de um usuário:** sem login e sem persistência.
 
-**Com mais tempo:** retrieval medido (BM25 por parágrafo antes de pensar em embeddings), autenticação por sessão ou código, datas de vigência nas promoções, bateria em CI com mais cenários e mais de um modelo, e reexecução com o manual original.
+**Com mais tempo:** retrieval medido (BM25 por parágrafo antes de pensar em embeddings), autenticação por sessão ou código, datas de vigência nas promoções, dividir o módulo `web.py` (781 linhas), testes do JavaScript da página dentro do repositório, tipagem estática, registro estruturado de eventos, bateria com o modelo real no CI e mais de um modelo, e reexecução com o manual original.
 
 ## Como foi construído
 
@@ -134,6 +148,7 @@ A história completa, com a linha do tempo, as regressões encontradas e como fo
 ```text
 run.sh, run.bat       lançadores de um comando
 src/emporio_agent/    agente, ferramentas, busca de políticas, CLI, interface web
+.github/workflows/   CI: testes em Linux e Windows, lint, cobertura e o lançador run.bat
 scripts/              bateria com o modelo real, geração de dados e de exemplos
 tests/                testes automáticos
 data_public/          dados sanitizados (clientes anonimizados, PDF sintético)

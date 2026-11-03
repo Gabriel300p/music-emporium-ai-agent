@@ -16,6 +16,13 @@ Gravadas em 2026-11-02 com o agente final (`gpt-4.1-mini`, OpenAI Responses API)
 
 Para gerar conversas novas, use a interface (`./run.sh`) e o botão **Exportar .md**.
 
+## Capturas da interface
+
+| Captura | O que mostra |
+|---|---|
+| [`screenshots/ui_inicio.png`](screenshots/ui_inicio.png) | Tela inicial: as sugestões de teste (cada uma diz o que verifica) e o painel "O que o agente consultou" |
+| [`screenshots/ui_orcamento.png`](screenshots/ui_orcamento.png) | Pergunta de orçamento com o modelo real: resposta com a fonte, os quatro indicadores e o tempo de cada chamada à API (nesta captura, 6,4 s na primeira e 1,5 s na segunda, na rede do autor) |
+
 ## Demonstração offline, sem API (`offline_demo/`)
 
 Cinco conversas geradas pelo agente por regras (sem modelo de linguagem) sobre dados 100% sintéticos de `demo_data/`. Servem para rodar o projeto sem chave e **não representam respostas do modelo**. Para regerar:
