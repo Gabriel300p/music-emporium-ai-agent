@@ -6,6 +6,7 @@ The Windows launcher cannot be executed here, so the known ways a batch file bre
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,9 +63,13 @@ def test_bat_looks_for_python_311_through_py_launcher_python_and_python3():
     assert "3, 11" in text
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
-def test_sh_is_valid_bash_and_executable_semantics():
-    subprocess.run(["bash", "-n", str(SH)], check=True)
-    head = SH.read_text(encoding="utf-8").splitlines()[0]
-    assert head.startswith("#!/usr/bin/env bash")
+def test_sh_declares_bash_and_the_repository_forces_lf_for_it():
+    assert SH.read_text(encoding="utf-8").splitlines()[0].startswith("#!/usr/bin/env bash")
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.sh text eol=lf" in attributes and "*.bat text eol=crlf" in attributes
+
+
+@pytest.mark.skipif(sys.platform == "win32" or shutil.which("bash") is None, reason="run.sh only runs on Linux and macOS")
+def test_sh_is_valid_bash_with_lf_line_endings():
     assert b"\r" not in SH.read_bytes(), "run.sh must use LF"
+    subprocess.run(["bash", "-n", str(SH)], check=True)
